@@ -2,7 +2,7 @@
 
 OpsPilot is a code-first, safety-oriented operations agent implemented in Go. Its core runtime stays provider-neutral while adapters integrate with the Volcengine AI ecosystem.
 
-> Status: early development. The project includes a bounded Agent Runtime, an Ark Responses API adapter, an MCP stdio server, privacy-safe runtime events, optional OpenTelemetry tracing, and machine-readable, read-only network, Docker, Kubernetes, and Prometheus diagnostics.
+> Status: early development. The project includes a bounded Agent Runtime, an Ark Responses API adapter, an MCP stdio server, privacy-safe runtime events, optional OpenTelemetry tracing, and machine-readable, read-only network, Docker, Kubernetes, Prometheus, and Loki diagnostics.
 
 ## Design goals
 
@@ -22,6 +22,7 @@ OpsPilot is a code-first, safety-oriented operations agent implemented in Go. It
 - Read-only Docker Engine, container-list, and redacted container-inspect diagnostics over a local Unix socket.
 - Read-only Kubernetes server, node, Pod-list, and redacted Pod-inspect diagnostics through client-go v0.36.2.
 - Read-only Prometheus build/runtime, active-target, and constrained metric-snapshot diagnostics through fixed `/api/v1` endpoints.
+- Read-only Loki readiness, build-info, and constrained stream-summary diagnostics without reading log lines.
 - Shared network guard that resolves and validates every dial target before connecting.
 - Machine-readable CLI intended for agents and automation.
 - JSONL lifecycle events with run IDs, step numbers, durations, and sanitized error classes.
@@ -54,7 +55,7 @@ export ARK_API_KEY='your-api-key'
 
 ```bash
 go run ./cmd/opspilot agent run \
-  'Check Kubernetes node readiness, unhealthy Pods, and Prometheus scrape targets.'
+  'Check Kubernetes Pods, Prometheus targets, and Loki stream availability.'
 ```
 
 The command writes the final structured result to stdout. The Ark model can select from the registered read-only tools.
@@ -105,7 +106,10 @@ A typical MCP client configuration is:
         "OPSPILOT_KUBECONFIG": "/absolute/path/to/kubeconfig",
         "OPSPILOT_KUBERNETES_CONTEXT": "production-readonly",
         "OPSPILOT_PROMETHEUS_URL": "https://prometheus.example.com",
-        "OPSPILOT_PROMETHEUS_BEARER_TOKEN_FILE": "/absolute/path/to/prometheus-token"
+        "OPSPILOT_PROMETHEUS_BEARER_TOKEN_FILE": "/absolute/path/to/prometheus-token",
+        "OPSPILOT_LOKI_URL": "https://loki.example.com",
+        "OPSPILOT_LOKI_BEARER_TOKEN_FILE": "/absolute/path/to/loki-token",
+        "OPSPILOT_LOKI_TENANT_ID": "operations"
       }
     }
   }
@@ -152,6 +156,11 @@ go run ./cmd/opspilot tool run prometheus_target_list \
 
 go run ./cmd/opspilot tool run prometheus_metric_snapshot \
   '{"metric":"up","matchers":{"job":"node"},"aggregation":"sum","group_by":["instance"],"limit":100}'
+
+go run ./cmd/opspilot tool run loki_server_info '{}'
+
+go run ./cmd/opspilot tool run loki_stream_summary \
+  '{"matchers":{"namespace":"operations","service_name":"api"},"lookback_minutes":60,"limit":100}'
 ```
 
 ### Docker diagnostic boundary
@@ -196,13 +205,21 @@ The client disables ambient proxies and redirects, requires TLS 1.2 or newer for
 
 Prometheus output is projected before it reaches the Agent. Scrape URLs, discovered labels, arbitrary target and metric labels, target error text, runtime hostname and working directory, API warning/info text, and raw server errors are omitted. Only warning and info counts are retained.
 
-Private, loopback, link-local, multicast, and unspecified HTTP/TLS targets are blocked by the generic network tools by default. Prometheus has its own explicitly configured trusted endpoint and does not accept a URL from tool arguments.
+### Loki diagnostic boundary
+
+Set `OPSPILOT_LOKI_URL` to a trusted Loki base URL. HTTPS is required by default. Internal HTTP requires `OPSPILOT_LOKI_ALLOW_HTTP=true`. Optional bearer authentication uses an absolute token file, and multi-tenant deployments may set one validated `OPSPILOT_LOKI_TENANT_ID`.
+
+The client disables ambient proxies and redirects, requires TLS 1.2 or newer for HTTPS, and only calls `/ready`, `/loki/api/v1/status/buildinfo`, and POST `/loki/api/v1/series`. It does not expose log lines, arbitrary LogQL, query/query-range, tail, labels or label-value enumeration, push, delete, config, metrics, rings, rules, arbitrary paths, or arbitrary methods.
+
+`loki_stream_summary` requires at least one exact-match label from a fixed diagnostic allowlist. Lookback is limited to 1–360 minutes, result count is limited to 1–500, and the selector plus timestamps are sent in a POST form rather than the URL. Returned streams are projected, deduplicated, deterministically sorted, and locally truncated. Unknown labels, file paths, and log content are omitted.
+
+Private, loopback, link-local, multicast, and unspecified HTTP/TLS targets are blocked by the generic network tools by default. Prometheus and Loki use explicitly configured trusted endpoints and do not accept URLs from tool arguments.
 
 ## Roadmap
 
 1. MCP client support and richer Agent skill packaging.
-2. Loki diagnostics.
-3. PostgreSQL task state and VikingDB retrieval.
-4. Approval gates, AgentKit/VKE deployment, and production evaluation.
+2. PostgreSQL task state and VikingDB retrieval.
+3. Approval gates and policy evaluation for state-changing operations.
+4. AgentKit/VKE deployment and production evaluation.
 
 See [`docs/architecture.md`](docs/architecture.md) for the initial boundaries.

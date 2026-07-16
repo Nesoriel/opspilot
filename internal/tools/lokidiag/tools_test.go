@@ -6,6 +6,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/Nesoriel/opspilot/internal/agent"
 	"github.com/Nesoriel/opspilot/internal/lokiapi"
 )
 

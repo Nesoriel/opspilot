@@ -89,13 +89,13 @@ func (c *Client) MetricSnapshot(ctx context.Context, request MetricSnapshotReque
 	if err != nil {
 		return MetricSnapshot{}, err
 	}
-	query := url.Values{
+	form := url.Values{
 		"query":   []string{queryExpression},
 		"timeout": []string{formatPrometheusDuration(c.queryTimeout())},
 		"limit":   []string{strconv.Itoa(limit)},
 	}
 	var raw rawQueryData
-	meta, err := c.get(ctx, "/api/v1/query", query, &raw)
+	meta, err := c.postForm(ctx, "/api/v1/query", form, &raw)
 	if err != nil {
 		return MetricSnapshot{}, err
 	}
@@ -216,9 +216,8 @@ func validMetricName(value string) bool {
 }
 
 func formatPrometheusDuration(duration time.Duration) string {
-	milliseconds := duration.Milliseconds()
-	if milliseconds < 1 {
-		milliseconds = 1
+	if duration < time.Millisecond {
+		duration = time.Millisecond
 	}
-	return strconv.FormatInt(milliseconds, 10) + "ms"
+	return duration.String()
 }

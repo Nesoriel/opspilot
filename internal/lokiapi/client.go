@@ -191,7 +191,9 @@ func (c *Client) requestJSON(ctx context.Context, method, apiPath string, form u
 	if err != nil {
 		return errors.New("loki_request_invalid: request could not be created")
 	}
-	c.applyHeaders(request)
+	if err := c.applyHeaders(request); err != nil {
+		return err
+	}
 	if form != nil {
 		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	}
@@ -223,7 +225,9 @@ func (c *Client) readiness(ctx context.Context) (bool, int, error) {
 	if err != nil {
 		return false, 0, errors.New("loki_request_invalid: readiness request could not be created")
 	}
-	c.applyHeaders(request)
+	if err := c.applyHeaders(request); err != nil {
+		return false, 0, err
+	}
 	response, err := c.httpClient.Do(request)
 	if err != nil {
 		return false, 0, classifyTransportError(err)
@@ -241,7 +245,7 @@ func (c *Client) readiness(ctx context.Context) (bool, int, error) {
 	return false, response.StatusCode, classifyHTTPStatus(response.StatusCode)
 }
 
-func (c *Client) applyHeaders(request *http.Request) {
+func (c *Client) applyHeaders(request *http.Request) error {
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("User-Agent", "opspilot/loki-readonly")
 	if c.tenantID != "" {
@@ -249,12 +253,12 @@ func (c *Client) applyHeaders(request *http.Request) {
 	}
 	if c.tokenFile != "" {
 		token, err := readBearerToken(c.tokenFile)
-		if err == nil {
-			request.Header.Set("Authorization", "Bearer "+token)
-		} else {
-			request.Header.Set("X-OpsPilot-Token-Error", err.Error())
+		if err != nil {
+			return err
 		}
+		request.Header.Set("Authorization", "Bearer "+token)
 	}
+	return nil
 }
 
 func readBearerToken(filename string) (string, error) {

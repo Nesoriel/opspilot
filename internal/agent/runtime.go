@@ -232,9 +232,13 @@ func marshalEnvelope(envelope toolEnvelope) string {
 }
 
 func (r *Runtime) observe(ctx context.Context, event Event) {
-	if r.observer != nil {
-		r.observer.Observe(ctx, event)
+	if r.observer == nil {
+		return
 	}
+	defer func() {
+		_ = recover()
+	}()
+	r.observer.Observe(ctx, event)
 }
 
 func newRunID() string {

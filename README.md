@@ -2,7 +2,7 @@
 
 OpsPilot is a code-first, safety-oriented operations agent implemented in Go. Its core runtime stays provider-neutral while adapters integrate with the Volcengine AI ecosystem.
 
-> Status: early engineering bootstrap. The current binary exposes a small, machine-readable, read-only tool runtime while the Ark model adapter and MCP layer are built next.
+> Status: early development. The project now includes a bounded Agent Runtime, an Ark Responses API adapter, and a small set of machine-readable, read-only diagnostic tools.
 
 ## Design goals
 
@@ -15,18 +15,40 @@ OpsPilot is a code-first, safety-oriented operations agent implemented in Go. It
 ## Current capabilities
 
 - Provider-neutral agent loop with bounded steps and structured tool errors.
+- Volcengine Ark Responses API adapter through CloudWeGo Eino `agenticark`.
 - Strongly defined tool registry with duplicate and schema validation.
 - Read-only `dns_lookup` and SSRF-aware `http_probe` tools.
 - Machine-readable CLI intended for agents and automation.
+- Configuration validation and provider-error secret redaction.
 
 ## Build and test
 
 ```bash
+go mod tidy
 go test ./...
 go build ./cmd/opspilot
 ```
 
-## Use the tool runtime
+## Configure Ark
+
+Copy `.env.example` into your preferred secret-management workflow and provide at least:
+
+```bash
+export ARK_MODEL_ID='ep-xxxxxxxxxxxxxxxx'
+export ARK_API_KEY='your-api-key'
+```
+
+`ARK_THINKING` accepts `auto`, `enabled`, or `disabled`. Credentials are read from the environment and must not be committed.
+
+## Run the agent
+
+```bash
+go run ./cmd/opspilot agent run 'Resolve example.com and check whether its website is reachable.'
+```
+
+The command emits structured JSON containing the final answer, full message history, and executed step count. The Ark model can select from the registered read-only tools.
+
+## Use the tool runtime directly
 
 ```bash
 go run ./cmd/opspilot tool list
@@ -38,10 +60,10 @@ Private, loopback, and link-local HTTP targets are blocked by default. Set `OPSP
 
 ## Roadmap
 
-1. Ark Responses API adapter using CloudWeGo Eino `agenticark`.
-2. Streaming event output and OpenTelemetry traces.
-3. MCP client/server support and agent skill packaging.
-4. Docker, Kubernetes, Prometheus, Loki, and TLS diagnostics.
-5. PostgreSQL task state, VikingDB retrieval, approval gates, and VKE deployment.
+1. Streaming Agent events and OpenTelemetry traces.
+2. MCP client/server support and richer Agent skill packaging.
+3. Docker, Kubernetes, Prometheus, Loki, and TLS diagnostics.
+4. PostgreSQL task state and VikingDB retrieval.
+5. Approval gates, AgentKit/VKE deployment, and production evaluation.
 
 See [`docs/architecture.md`](docs/architecture.md) for the initial boundaries.

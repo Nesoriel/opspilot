@@ -2,12 +2,12 @@ package kubeapi
 
 import (
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
@@ -105,6 +105,24 @@ func TestLoadRESTConfigRejectsUnsafeKubeconfigFeatures(t *testing.T) {
 	}
 }
 
+func TestHardenRESTConfigRejectsUnsafeResolvedConfiguration(t *testing.T) {
+	tests := []struct {
+		name   string
+		config *rest.Config
+	}{
+		{name: "HTTP host", config: &rest.Config{Host: "http://127.0.0.1:8080"}},
+		{name: "insecure TLS", config: &rest.Config{Host: "https://kubernetes.example.test", TLSClientConfig: rest.TLSClientConfig{Insecure: true}}},
+		{name: "impersonation", config: &rest.Config{Host: "https://kubernetes.example.test", Impersonate: rest.ImpersonationConfig{UserName: "cluster-admin"}}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if err := hardenRESTConfig(test.config, Config{Timeout: time.Second, QPS: 1, Burst: 1}); err == nil {
+				t.Fatal("expected unsafe resolved configuration to be rejected")
+			}
+		})
+	}
+}
+
 func TestLoadRESTConfigRejectsRelativeAndMissingPaths(t *testing.T) {
 	if _, _, err := loadRESTConfig(Config{KubeconfigPath: "relative/config"}); err == nil || !strings.Contains(err.Error(), "must be absolute") {
 		t.Fatalf("unexpected relative path error: %v", err)
@@ -155,5 +173,4 @@ func TestReadInClusterNamespaceFallsBack(t *testing.T) {
 	if namespace := readInClusterNamespace(); strings.TrimSpace(namespace) == "" {
 		t.Fatal("namespace fallback was empty")
 	}
-	_ = os.Getenv("KUBERNETES_SERVICE_HOST")
 }

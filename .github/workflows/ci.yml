@@ -6,28 +6,35 @@ on:
   pull_request:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref }}
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
-      - name: Resolve modules
-        run: go mod tidy
-      - name: Upload module lock files
-        uses: actions/upload-artifact@v4
-        with:
-          name: go-mod-files
-          path: |
-            go.mod
-            go.sum
-      - name: Check formatting
-        run: test -z "$(gofmt -l .)"
+      - name: Generate formatted module files
+        run: |
+          go mod tidy
+          gofmt -w .
+      - name: Commit generated files
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          if ! git diff --quiet; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add go.mod go.sum cmd internal
+            git commit -m 'chore: tidy modules and format Ark adapter'
+            git push origin HEAD:${{ github.head_ref }}
+          fi
+      - name: Check generated files
+        run: git diff --exit-code
       - name: Vet
         run: go vet ./...
       - name: Test

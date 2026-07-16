@@ -9,11 +9,11 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/Nesoriel/opspilot/internal/agent"
+	"github.com/Nesoriel/opspilot/internal/netguard"
 )
 
 type Config struct {
@@ -51,10 +51,10 @@ func New(config Config) *Tool {
 		config.Resolver = net.DefaultResolver
 	}
 
-	dialer := &safeDialer{
-		resolver:     config.Resolver,
-		allowPrivate: config.AllowPrivateNetworks,
-		dialer:       net.Dialer{Timeout: config.Timeout},
+	dialer := &netguard.Dialer{
+		Resolver:     config.Resolver,
+		AllowPrivate: config.AllowPrivateNetworks,
+		Dialer:       net.Dialer{Timeout: config.Timeout},
 	}
 	transport := &http.Transport{
 		Proxy:               nil,
@@ -143,47 +143,4 @@ func (t *Tool) Execute(ctx context.Context, arguments json.RawMessage) (json.Raw
 		return nil, fmt.Errorf("encode result: %w", err)
 	}
 	return payload, nil
-}
-
-type safeDialer struct {
-	resolver     *net.Resolver
-	allowPrivate bool
-	dialer       net.Dialer
-}
-
-func (d *safeDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	host, port, err := net.SplitHostPort(address)
-	if err != nil {
-		return nil, fmt.Errorf("split target address: %w", err)
-	}
-
-	addresses, err := d.resolver.LookupIPAddr(ctx, host)
-	if err != nil {
-		return nil, fmt.Errorf("resolve target %q: %w", host, err)
-	}
-	if len(addresses) == 0 {
-		return nil, fmt.Errorf("target %q resolved to no addresses", host)
-	}
-	sort.Slice(addresses, func(i, j int) bool {
-		return addresses[i].IP.String() < addresses[j].IP.String()
-	})
-
-	var blocked []string
-	for _, address := range addresses {
-		if !d.allowPrivate && isBlocked(address.IP) {
-			blocked = append(blocked, address.IP.String())
-			continue
-		}
-		return d.dialer.DialContext(ctx, network, net.JoinHostPort(address.IP.String(), port))
-	}
-	return nil, fmt.Errorf("target resolves only to blocked addresses: %s", strings.Join(blocked, ", "))
-}
-
-func isBlocked(ip net.IP) bool {
-	return ip.IsLoopback() ||
-		ip.IsPrivate() ||
-		ip.IsLinkLocalUnicast() ||
-		ip.IsLinkLocalMulticast() ||
-		ip.IsMulticast() ||
-		ip.IsUnspecified()
 }

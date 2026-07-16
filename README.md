@@ -2,7 +2,7 @@
 
 OpsPilot is a code-first, safety-oriented operations agent implemented in Go. Its core runtime stays provider-neutral while adapters integrate with the Volcengine AI ecosystem.
 
-> Status: early development. The project includes a bounded Agent Runtime, an Ark Responses API adapter, an MCP stdio server, privacy-safe runtime events, optional OpenTelemetry tracing, and a small set of machine-readable, read-only diagnostic tools.
+> Status: early development. The project includes a bounded Agent Runtime, an Ark Responses API adapter, an MCP stdio server, privacy-safe runtime events, optional OpenTelemetry tracing, and machine-readable, read-only network diagnostics.
 
 ## Design goals
 
@@ -18,7 +18,8 @@ OpsPilot is a code-first, safety-oriented operations agent implemented in Go. It
 - Volcengine Ark Responses API adapter through CloudWeGo Eino `agenticark`.
 - Official MCP Go SDK stdio server backed by the same tool registry as the CLI and Agent Runtime.
 - Strongly defined tool registry with duplicate and schema validation.
-- Read-only `dns_lookup` and SSRF-aware `http_probe` tools.
+- Read-only `dns_lookup`, SSRF-aware `http_probe`, and certificate-aware `tls_inspect` tools.
+- Shared network guard that resolves and validates every dial target before connecting.
 - Machine-readable CLI intended for agents and automation.
 - JSONL lifecycle events with run IDs, step numbers, durations, and sanitized error classes.
 - Optional OTLP/HTTP traces for Agent runs, model calls, and tool executions.
@@ -49,7 +50,7 @@ export ARK_API_KEY='your-api-key'
 ## Run the agent
 
 ```bash
-go run ./cmd/opspilot agent run 'Resolve example.com and check whether its website is reachable.'
+go run ./cmd/opspilot agent run 'Resolve example.com, inspect its TLS certificate, and check whether the website is reachable.'
 ```
 
 The command writes the final structured result to stdout. The Ark model can select from the registered read-only tools.
@@ -58,7 +59,7 @@ The command writes the final structured result to stdout. The Ark model can sele
 
 ```bash
 go run ./cmd/opspilot agent run --events=jsonl \
-  'Resolve example.com and check whether its website is reachable.' \
+  'Inspect example.com.' \
   2>events.jsonl
 ```
 
@@ -94,7 +95,8 @@ A typical MCP client configuration is:
       "command": "/absolute/path/to/opspilot",
       "args": ["mcp", "stdio"],
       "env": {
-        "OPSPILOT_HTTP_ALLOW_PRIVATE": "false"
+        "OPSPILOT_HTTP_ALLOW_PRIVATE": "false",
+        "OPSPILOT_TLS_ALLOW_PRIVATE": "false"
       }
     }
   }
@@ -109,14 +111,17 @@ The server publishes each Registry tool with its existing JSON Schema and explic
 go run ./cmd/opspilot tool list
 go run ./cmd/opspilot tool run dns_lookup '{"host":"example.com"}'
 go run ./cmd/opspilot tool run http_probe '{"url":"https://example.com"}'
+go run ./cmd/opspilot tool run tls_inspect '{"host":"example.com","port":443}'
 ```
 
-Private, loopback, and link-local HTTP targets are blocked by default. Set `OPSPILOT_HTTP_ALLOW_PRIVATE=true` only in a trusted environment where internal service diagnostics are intended.
+`tls_inspect` reports the negotiated TLS version, cipher suite, ALPN, certificate chain, validity dates, remaining days, hostname verification, and trust result. A certificate that is expired, not yet valid, untrusted, or mismatched is returned as structured evidence instead of being hidden behind a generic handshake error.
+
+Private, loopback, link-local, multicast, and unspecified HTTP/TLS targets are blocked by default. Set `OPSPILOT_HTTP_ALLOW_PRIVATE=true` or `OPSPILOT_TLS_ALLOW_PRIVATE=true` only in a trusted environment where internal service diagnostics are intended.
 
 ## Roadmap
 
 1. MCP client support and richer Agent skill packaging.
-2. Docker, Kubernetes, Prometheus, Loki, and TLS diagnostics.
+2. Docker, Kubernetes, Prometheus, and Loki diagnostics.
 3. PostgreSQL task state and VikingDB retrieval.
 4. Approval gates, AgentKit/VKE deployment, and production evaluation.
 

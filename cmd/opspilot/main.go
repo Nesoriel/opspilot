@@ -17,6 +17,7 @@ import (
 	arkmodel "github.com/Nesoriel/opspilot/internal/models/ark"
 	"github.com/Nesoriel/opspilot/internal/tools/dnslookup"
 	"github.com/Nesoriel/opspilot/internal/tools/httpprobe"
+	"github.com/Nesoriel/opspilot/internal/tools/tlsinspect"
 )
 
 var version = "dev"
@@ -159,13 +160,18 @@ func runTool(ctx context.Context, args []string, stdout, stderr io.Writer) error
 }
 
 func buildRegistry() (*agent.Registry, error) {
-	allowPrivate, _ := strconv.ParseBool(os.Getenv("OPSPILOT_HTTP_ALLOW_PRIVATE"))
+	allowHTTPPrivate, _ := strconv.ParseBool(os.Getenv("OPSPILOT_HTTP_ALLOW_PRIVATE"))
+	allowTLSPrivate, _ := strconv.ParseBool(os.Getenv("OPSPILOT_TLS_ALLOW_PRIVATE"))
 	registry := agent.NewRegistry()
 	for _, tool := range []agent.Tool{
 		dnslookup.New(nil),
 		httpprobe.New(httpprobe.Config{
-			AllowPrivateNetworks: allowPrivate,
+			AllowPrivateNetworks: allowHTTPPrivate,
 			Timeout:              15 * time.Second,
+		}),
+		tlsinspect.New(tlsinspect.Config{
+			AllowPrivateNetworks: allowTLSPrivate,
+			Timeout:              10 * time.Second,
 		}),
 	} {
 		if err := registry.Register(tool); err != nil {

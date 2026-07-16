@@ -62,7 +62,7 @@ func mapBuildInfo(raw rawBuildInfo) BuildInfo {
 }
 
 func mapStreams(raw []map[string]string, allowlist map[string]struct{}, limit int) ([]StreamSummaryItem, bool) {
-	result := make([]StreamSummaryItem, 0, len(raw))
+	unique := make(map[string]StreamSummaryItem, len(raw))
 	for _, labels := range raw {
 		projected := make(map[string]string)
 		for name, value := range labels {
@@ -70,7 +70,15 @@ func mapStreams(raw []map[string]string, allowlist map[string]struct{}, limit in
 				projected[name] = sanitizeDisplay(value, 512)
 			}
 		}
-		result = append(result, StreamSummaryItem{Labels: projected})
+		if len(projected) == 0 {
+			continue
+		}
+		item := StreamSummaryItem{Labels: projected}
+		unique[canonicalLabels(projected)] = item
+	}
+	result := make([]StreamSummaryItem, 0, len(unique))
+	for _, item := range unique {
+		result = append(result, item)
 	}
 	sort.Slice(result, func(i, j int) bool {
 		return canonicalLabels(result[i].Labels) < canonicalLabels(result[j].Labels)

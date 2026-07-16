@@ -5,24 +5,31 @@
 OpsPilot owns its execution policy and state transitions. Volcengine services accelerate model inference, retrieval, deployment, and observability, but do not define the domain model.
 
 ```text
-OpenClaw / Hermes / API / CLI
-             |
-             v
-      OpsPilot Go runtime
-      - bounded agent loop
-      - policy and approval
-      - structured events
-             |
-   +---------+----------+
-   |         |          |
-   v         v          v
-Models     Tools    Observability
-Ark/Eino   built-in JSONL events
-others     MCP      OpenTelemetry
-   |         |          |
-   v         v          v
-Volcengine Docker/K8s OTLP collector
-Ark        Prom/Loki  cloud backend
+OpenClaw / Hermes / MCP client / API / CLI
+                  |
+                  v
+          OpsPilot process boundary
+          - Agent CLI
+          - Tool CLI
+          - MCP stdio server
+                  |
+                  v
+          OpsPilot Go runtime
+          - bounded agent loop
+          - policy and approval
+          - shared tool registry
+          - structured events
+                  |
+        +---------+----------+
+        |         |          |
+        v         v          v
+      Models    Tools    Observability
+      Ark/Eino  built-in JSONL events
+      others    future MCP OpenTelemetry
+        |         |          |
+        v         v          v
+      Volcengine Docker/K8s OTLP collector
+      Ark        Prom/Loki  cloud backend
 ```
 
 ## Package boundaries
@@ -30,9 +37,23 @@ Ark        Prom/Loki  cloud backend
 - `internal/agent`: provider-neutral messages, model/tool contracts, registry, bounded runtime, and lifecycle event definitions.
 - `internal/models`: provider adapters such as the Ark Responses API adapter. Provider SDKs must not enter `internal/agent`.
 - `internal/tools`: read-only operational tools. Tools must validate JSON strictly and respect `context.Context`.
+- `internal/mcpserver`: adapts the shared Registry to the official MCP Go SDK without duplicating tool implementations.
 - `internal/observability`: observer composition, privacy-safe JSONL records, and OpenTelemetry span translation.
 - `cmd/opspilot`: machine-readable process boundary. Human-friendly UI is not a current priority.
 - `skills`: instructions and schemas for external agents that invoke OpsPilot.
+
+## MCP boundary
+
+The MCP server is a transport adapter, not a second execution engine.
+
+- Tool names, descriptions, and JSON Schemas come from `agent.Registry`.
+- MCP calls execute the same `agent.Tool` implementation used by the CLI and Agent Runtime.
+- Published annotations mark current tools as read-only and idempotent; network tools are conservatively marked open-world.
+- Each MCP tool call is bounded by context cancellation and a server-side timeout.
+- JSON object results are returned as both text content and MCP structured content.
+- Tool failures use `CallToolResult.IsError`; unknown tool names remain protocol-level errors.
+- stdio stdout is reserved exclusively for MCP protocol frames. Logs and startup failures go to stderr.
+- The first transport is local stdio. Remote HTTP, authentication, and multi-tenant policy remain separate work.
 
 ## Observability boundary
 
@@ -50,9 +71,10 @@ The Agent Runtime emits provider-neutral lifecycle events with a run ID, timesta
 2. Arbitrary shell strings are not a tool interface.
 3. Every call has a timeout and a bounded Agent run has a maximum step count.
 4. Network tools deny private, loopback, link-local, multicast, and unspecified targets unless a trusted deployment explicitly enables them.
-5. Tool failures are returned to the model as structured data; they do not silently disappear.
+5. Tool failures are returned to the model or MCP client as structured data; they do not silently disappear.
 6. Future mutating tools must pass policy evaluation and an approval checkpoint before execution.
 7. Observability metadata must not become a covert channel for prompts, credentials, or complete tool data.
+8. Protocol transports must keep framing channels free from unrelated logs or diagnostics.
 
 ## Volcengine integration plan
 

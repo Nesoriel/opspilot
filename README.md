@@ -2,7 +2,7 @@
 
 OpsPilot is a code-first, safety-oriented operations agent implemented in Go. Its core runtime stays provider-neutral while adapters integrate with the Volcengine AI ecosystem.
 
-> Status: early development. The project includes a bounded Agent Runtime, an Ark Responses API adapter, an MCP stdio server, privacy-safe runtime events, optional OpenTelemetry tracing, and machine-readable, read-only network, Docker, and Kubernetes diagnostics.
+> Status: early development. The project includes a bounded Agent Runtime, an Ark Responses API adapter, an MCP stdio server, privacy-safe runtime events, optional OpenTelemetry tracing, and machine-readable, read-only network, Docker, Kubernetes, and Prometheus diagnostics.
 
 ## Design goals
 
@@ -21,6 +21,7 @@ OpsPilot is a code-first, safety-oriented operations agent implemented in Go. It
 - Read-only `dns_lookup`, SSRF-aware `http_probe`, and certificate-aware `tls_inspect` tools.
 - Read-only Docker Engine, container-list, and redacted container-inspect diagnostics over a local Unix socket.
 - Read-only Kubernetes server, node, Pod-list, and redacted Pod-inspect diagnostics through client-go v0.36.2.
+- Read-only Prometheus build/runtime, active-target, and constrained metric-snapshot diagnostics through fixed `/api/v1` endpoints.
 - Shared network guard that resolves and validates every dial target before connecting.
 - Machine-readable CLI intended for agents and automation.
 - JSONL lifecycle events with run IDs, step numbers, durations, and sanitized error classes.
@@ -53,7 +54,7 @@ export ARK_API_KEY='your-api-key'
 
 ```bash
 go run ./cmd/opspilot agent run \
-  'Check Kubernetes node readiness and identify unhealthy or restarting Pods in the operations namespace.'
+  'Check Kubernetes node readiness, unhealthy Pods, and Prometheus scrape targets.'
 ```
 
 The command writes the final structured result to stdout. The Ark model can select from the registered read-only tools.
@@ -102,7 +103,9 @@ A typical MCP client configuration is:
         "OPSPILOT_TLS_ALLOW_PRIVATE": "false",
         "OPSPILOT_DOCKER_SOCKET": "/var/run/docker.sock",
         "OPSPILOT_KUBECONFIG": "/absolute/path/to/kubeconfig",
-        "OPSPILOT_KUBERNETES_CONTEXT": "production-readonly"
+        "OPSPILOT_KUBERNETES_CONTEXT": "production-readonly",
+        "OPSPILOT_PROMETHEUS_URL": "https://prometheus.example.com",
+        "OPSPILOT_PROMETHEUS_BEARER_TOKEN_FILE": "/absolute/path/to/prometheus-token"
       }
     }
   }
@@ -141,6 +144,14 @@ go run ./cmd/opspilot tool run kubernetes_pod_list \
 
 go run ./cmd/opspilot tool run kubernetes_pod_inspect \
   '{"namespace":"operations","pod":"web-0","event_limit":50}'
+
+go run ./cmd/opspilot tool run prometheus_server_info '{}'
+
+go run ./cmd/opspilot tool run prometheus_target_list \
+  '{"limit":100}'
+
+go run ./cmd/opspilot tool run prometheus_metric_snapshot \
+  '{"metric":"up","matchers":{"job":"node"},"aggregation":"sum","group_by":["instance"],"limit":100}'
 ```
 
 ### Docker diagnostic boundary
@@ -161,14 +172,7 @@ OpsPilot uses the official Kubernetes client-go v0.36.2. Kubernetes configuratio
 
 When running outside a cluster, set `OPSPILOT_KUBECONFIG` to an absolute kubeconfig path. `OPSPILOT_KUBERNETES_CONTEXT` optionally selects a context. When running inside Kubernetes without an explicit kubeconfig, OpsPilot uses the mounted ServiceAccount token and CA.
 
-Before constructing a Kubernetes client, OpsPilot rejects kubeconfigs that contain:
-
-- HTTP API servers;
-- `insecure-skip-tls-verify`;
-- kubeconfig proxy URLs;
-- exec credential plugins;
-- legacy auth-provider plugins;
-- user impersonation.
+Before constructing a Kubernetes client, OpsPilot rejects kubeconfigs that contain HTTP API servers, `insecure-skip-tls-verify`, proxy URLs, exec credential plugins, legacy auth-provider plugins, or user impersonation.
 
 The model cannot provide a kubeconfig path, API server URL, arbitrary resource type, selector, API path, or HTTP method in tool arguments.
 
@@ -180,20 +184,24 @@ Apply the included minimum RBAC objects for an in-cluster deployment:
 kubectl apply -f deploy/kubernetes/opspilot-readonly-rbac.yaml
 ```
 
-The role grants only:
+The role grants GET on `/version`, GET/LIST on Nodes and Pods, and LIST on Events. It does not grant Secret access or the `pods/log` subresource.
 
-- GET on `/version`;
-- GET/LIST on Nodes and Pods;
-- LIST on Events.
+### Prometheus diagnostic boundary
 
-It does not grant Secret access or the `pods/log` subresource.
+Set `OPSPILOT_PROMETHEUS_URL` to the trusted Prometheus base URL. HTTPS is required by default. Internal HTTP endpoints require the explicit `OPSPILOT_PROMETHEUS_ALLOW_HTTP=true` opt-in. Optional bearer authentication uses an absolute path in `OPSPILOT_PROMETHEUS_BEARER_TOKEN_FILE`; the token is read for each request to support rotation and is never returned.
 
-Private, loopback, link-local, multicast, and unspecified HTTP/TLS targets are blocked by default. Set `OPSPILOT_HTTP_ALLOW_PRIVATE=true` or `OPSPILOT_TLS_ALLOW_PRIVATE=true` only in a trusted environment where internal service diagnostics are intended.
+The client disables ambient proxies and redirects, requires TLS 1.2 or newer for HTTPS, bounds response bytes and timeouts, and only calls fixed read-only `/api/v1` endpoints. It does not expose configuration, flags, rules, alerts, label enumeration, series enumeration, admin APIs, or arbitrary paths.
+
+`prometheus_metric_snapshot` does not accept raw PromQL. OpsPilot generates a bounded instant query from a validated metric name, up to eight exact-match diagnostic labels, one of `none`, `sum`, `avg`, `min`, `max`, or `count`, up to five grouping labels, and a hard series limit. Query parameters are submitted in a POST form rather than the URL.
+
+Prometheus output is projected before it reaches the Agent. Scrape URLs, discovered labels, arbitrary target and metric labels, target error text, runtime hostname and working directory, API warning/info text, and raw server errors are omitted. Only warning and info counts are retained.
+
+Private, loopback, link-local, multicast, and unspecified HTTP/TLS targets are blocked by the generic network tools by default. Prometheus has its own explicitly configured trusted endpoint and does not accept a URL from tool arguments.
 
 ## Roadmap
 
 1. MCP client support and richer Agent skill packaging.
-2. Prometheus and Loki diagnostics.
+2. Loki diagnostics.
 3. PostgreSQL task state and VikingDB retrieval.
 4. Approval gates, AgentKit/VKE deployment, and production evaluation.
 

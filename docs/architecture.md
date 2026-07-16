@@ -27,6 +27,7 @@ OpenClaw / Hermes / MCP client / API / CLI
       Ark/Eino  network  JSONL events
       others    Docker   OpenTelemetry
                 K8s
+                Prometheus
         |         |          |
         v         v          v
       Volcengine local and  OTLP collector
@@ -39,6 +40,7 @@ OpenClaw / Hermes / MCP client / API / CLI
 - `internal/models`: provider adapters such as the Ark Responses API adapter. Provider SDKs must not enter `internal/agent`.
 - `internal/dockerapi`: a bounded, read-only Docker Engine API adapter over a trusted local Unix socket. It owns API negotiation, transport errors, response limits, and redacted response projections.
 - `internal/kubeapi`: a lazy, bounded, read-only Kubernetes adapter built on official client-go. It owns safe configuration loading, API error classification, fixed resource queries, and redacted response projections.
+- `internal/promapi`: a lazy, bounded, read-only Prometheus `/api/v1` adapter. It owns endpoint validation, fixed requests, safe query generation, transport limits, and privacy-aware projections.
 - `internal/tools`: read-only operational tools. Tools must validate JSON strictly and respect `context.Context`.
 - `internal/mcpserver`: adapts the shared Registry to the official MCP Go SDK without duplicating tool implementations.
 - `internal/observability`: observer composition, privacy-safe JSONL records, and OpenTelemetry span translation.
@@ -51,7 +53,7 @@ The MCP server is a transport adapter, not a second execution engine.
 
 - Tool names, descriptions, and JSON Schemas come from `agent.Registry`.
 - MCP calls execute the same `agent.Tool` implementation used by the CLI and Agent Runtime.
-- Published annotations mark current tools as read-only and idempotent; network, Docker, and Kubernetes tools are conservatively marked open-world because they interact with systems outside the process.
+- Published annotations mark current tools as read-only and idempotent; network, Docker, Kubernetes, and Prometheus tools are conservatively marked open-world because they interact with systems outside the process.
 - Each MCP tool call is bounded by context cancellation and a server-side timeout.
 - JSON object results are returned as both text content and MCP structured content.
 - Tool failures use `CallToolResult.IsError`; unknown tool names remain protocol-level errors.
@@ -93,6 +95,24 @@ Kubernetes support uses the official client-go adapter behind fixed Agent tools.
 
 RBAC is the cluster-enforced boundary. Code-level GET-only behavior and projection redaction complement RBAC but do not replace it.
 
+## Prometheus boundary
+
+Prometheus support uses a small standard-library HTTP adapter behind three fixed Agent tools.
+
+- Initialization is lazy. Missing Prometheus configuration does not block CLI discovery, MCP startup, or unrelated tools.
+- The base URL is process configuration, never a tool argument. HTTPS is required unless a trusted deployment explicitly enables HTTP.
+- URL user information, query strings, fragments, redirects, ambient proxies, and insecure TLS are not allowed. HTTPS requires TLS 1.2 or newer.
+- Optional bearer authentication reads a bounded token from an absolute file for each request, supporting rotation without exposing the value.
+- The only endpoints are build information, runtime information, active targets, and instant query. Configuration, flags, rules, alerts, labels, series enumeration, and administration endpoints are absent.
+- Status and target requests use GET. Metric matchers are submitted using the Prometheus URL-encoded POST form so they do not appear in the request URL.
+- Arbitrary PromQL is not a tool interface. The adapter generates a selector from one validated metric name, up to eight exact label matchers from a fixed diagnostic allowlist, an optional safe aggregation, up to five grouping labels, and a hard series limit.
+- Request timeout, Prometheus query timeout, response bytes, target count, and series count are all bounded. Result limits are applied again locally.
+- Raw API envelopes and objects are never returned. Scrape URLs, discovered labels, arbitrary labels, target error text, runtime hostname and working directory, warning/info text, and raw API errors are excluded.
+- Target errors are represented by `error_present`. API warnings and infos are represented by counts only.
+- Sample timestamps must be finite and within the RFC3339 year range. Unexpected result types, malformed values, oversized responses, and invalid timestamps are rejected.
+
+The Prometheus endpoint and bearer token remain privileged operational credentials. The process must receive only the minimum read-only access required by its deployment.
+
 ## Observability boundary
 
 The Agent Runtime emits provider-neutral lifecycle events with a run ID, timestamp, duration, step, tool name, call ID, and error value. Observers translate these events for different consumers.
@@ -111,10 +131,11 @@ The Agent Runtime emits provider-neutral lifecycle events with a run ID, timesta
 4. Network tools deny private, loopback, link-local, multicast, and unspecified targets unless a trusted deployment explicitly enables them.
 5. Docker tools require a trusted local Unix socket and expose only a fixed allowlist of GET operations and output fields.
 6. Kubernetes tools require validated trusted credentials, fixed resource queries, redacted projections, and least-privilege RBAC.
-7. Tool failures are returned to the model or MCP client as structured data; they do not silently disappear.
-8. Future mutating tools must pass policy evaluation and an approval checkpoint before execution.
-9. Observability metadata must not become a covert channel for prompts, credentials, or complete tool data.
-10. Protocol transports must keep framing channels free from unrelated logs or diagnostics.
+7. Prometheus tools require a trusted configured endpoint, fixed API calls, generated bounded queries, redacted projections, and bounded output.
+8. Tool failures are returned to the model or MCP client as structured data; they do not silently disappear.
+9. Future mutating tools must pass policy evaluation and an approval checkpoint before execution.
+10. Observability metadata must not become a covert channel for prompts, credentials, or complete tool data.
+11. Protocol transports must keep framing channels free from unrelated logs or diagnostics.
 
 ## Volcengine integration plan
 

@@ -7,6 +7,7 @@ func TestBuildRegistryIncludesReadOnlyDiagnostics(t *testing.T) {
 	t.Setenv("OPSPILOT_TLS_ALLOW_PRIVATE", "false")
 	t.Setenv("OPSPILOT_DOCKER_SOCKET", "")
 	t.Setenv("OPSPILOT_KUBECONFIG", "/definitely/not/loaded/during-registry-build")
+	t.Setenv("OPSPILOT_PROMETHEUS_URL", "")
 	registry, err := buildRegistry()
 	if err != nil {
 		t.Fatalf("build registry: %v", err)
@@ -22,6 +23,9 @@ func TestBuildRegistryIncludesReadOnlyDiagnostics(t *testing.T) {
 		"kubernetes_cluster_info",
 		"kubernetes_pod_inspect",
 		"kubernetes_pod_list",
+		"prometheus_metric_snapshot",
+		"prometheus_server_info",
+		"prometheus_target_list",
 		"tls_inspect",
 	}
 	if len(definitions) != len(want) {

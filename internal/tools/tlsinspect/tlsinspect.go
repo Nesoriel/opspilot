@@ -321,7 +321,7 @@ func summarizeCertificates(chain []*x509.Certificate, now time.Time) ([]certific
 			IPAddresses:        ipAddresses,
 			NotBefore:          cert.NotBefore.UTC().Format(time.RFC3339),
 			NotAfter:           cert.NotAfter.UTC().Format(time.RFC3339),
-			DaysRemaining:      int64(cert.NotAfter.Sub(now).Hours() / 24),
+			DaysRemaining:      remainingDays(cert.NotAfter, now),
 			SignatureAlgorithm: cert.SignatureAlgorithm.String(),
 			PublicKeyAlgorithm: cert.PublicKeyAlgorithm.String(),
 			IsCA:               cert.IsCA,

@@ -15,7 +15,7 @@ type PodListTool struct {
 
 type podListInput struct {
 	Namespace string `json:"namespace,omitempty"`
-	Limit     int    `json:"limit,omitempty"`
+	Limit     *int   `json:"limit,omitempty"`
 }
 
 func NewPodList(client Client) *PodListTool {
@@ -31,7 +31,7 @@ func (t *PodListTool) Definition() agent.ToolDefinition {
 }
 
 func (t *PodListTool) Execute(ctx context.Context, arguments json.RawMessage) (json.RawMessage, error) {
-	input := podListInput{Limit: defaultPodLimit}
+	var input podListInput
 	if err := decodeStrict(arguments, &input); err != nil {
 		return nil, err
 	}
@@ -42,18 +42,19 @@ func (t *PodListTool) Execute(ctx context.Context, arguments json.RawMessage) (j
 	if err := validateNamespace(input.Namespace, true); err != nil {
 		return nil, err
 	}
-	if input.Limit == 0 {
-		input.Limit = defaultPodLimit
+	limit := defaultPodLimit
+	if input.Limit != nil {
+		limit = *input.Limit
 	}
-	if input.Limit < 1 || input.Limit > maxPodLimit {
+	if limit < 1 || limit > maxPodLimit {
 		return nil, errors.New("limit must be between 1 and 200")
 	}
-	result, err := t.client.PodList(ctx, input.Namespace, int64(input.Limit))
+	result, err := t.client.PodList(ctx, input.Namespace, int64(limit))
 	if err != nil {
 		return nil, err
 	}
-	if len(result.Pods) > input.Limit {
-		result.Pods = result.Pods[:input.Limit]
+	if len(result.Pods) > limit {
+		result.Pods = result.Pods[:limit]
 		result.Count = len(result.Pods)
 		result.Truncated = true
 	}

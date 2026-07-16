@@ -14,8 +14,10 @@ import (
 	"time"
 
 	"github.com/Nesoriel/opspilot/internal/agent"
+	"github.com/Nesoriel/opspilot/internal/dockerapi"
 	arkmodel "github.com/Nesoriel/opspilot/internal/models/ark"
 	"github.com/Nesoriel/opspilot/internal/tools/dnslookup"
+	"github.com/Nesoriel/opspilot/internal/tools/dockerdiag"
 	"github.com/Nesoriel/opspilot/internal/tools/httpprobe"
 	"github.com/Nesoriel/opspilot/internal/tools/tlsinspect"
 )
@@ -162,9 +164,20 @@ func runTool(ctx context.Context, args []string, stdout, stderr io.Writer) error
 func buildRegistry() (*agent.Registry, error) {
 	allowHTTPPrivate, _ := strconv.ParseBool(os.Getenv("OPSPILOT_HTTP_ALLOW_PRIVATE"))
 	allowTLSPrivate, _ := strconv.ParseBool(os.Getenv("OPSPILOT_TLS_ALLOW_PRIVATE"))
+	dockerClient, err := dockerapi.New(dockerapi.Config{
+		SocketPath: os.Getenv("OPSPILOT_DOCKER_SOCKET"),
+		Timeout:    5 * time.Second,
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	registry := agent.NewRegistry()
 	for _, tool := range []agent.Tool{
 		dnslookup.New(nil),
+		dockerdiag.NewEngineInfo(dockerClient),
+		dockerdiag.NewContainerList(dockerClient),
+		dockerdiag.NewContainerInspect(dockerClient),
 		httpprobe.New(httpprobe.Config{
 			AllowPrivateNetworks: allowHTTPPrivate,
 			Timeout:              15 * time.Second,

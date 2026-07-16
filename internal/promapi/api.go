@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -103,7 +104,7 @@ func (c *Client) MetricSnapshot(ctx context.Context, request MetricSnapshotReque
 		return MetricSnapshot{}, err
 	}
 	return MetricSnapshot{
-		Metric:       request.Metric,
+		Metric:       strings.TrimSpace(request.Metric),
 		Aggregation:  aggregation,
 		Count:        len(series),
 		Truncated:    truncated,

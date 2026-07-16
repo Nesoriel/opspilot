@@ -7,6 +7,23 @@ description: Run safe, read-only infrastructure diagnostics or delegate a bounde
 
 Use OpsPilot when evidence is required from DNS or HTTP endpoints. Treat its JSON output as evidence and preserve uncertainty.
 
+## Preferred integration: MCP
+
+Configure the OpsPilot binary as a stdio MCP server:
+
+```json
+{
+  "mcpServers": {
+    "opspilot": {
+      "command": "/absolute/path/to/opspilot",
+      "args": ["mcp", "stdio"]
+    }
+  }
+}
+```
+
+Discover and invoke the published tools through the MCP client. The tools are read-only and idempotent, but network tools still interact with external systems. Do not enable private-network access unless the runtime is trusted.
+
 ## Delegate a diagnostic task
 
 ```bash
@@ -23,7 +40,7 @@ opspilot agent run --events=jsonl 'Inspect example.com.' 2>events.jsonl
 
 Consume stderr as a JSONL event stream and stdout as the final result. Events contain lifecycle metadata only; they do not contain prompts, tool arguments, tool results, or credentials.
 
-## Discover tools
+## Discover tools without MCP
 
 ```bash
 opspilot tool list
@@ -38,4 +55,4 @@ opspilot tool run http_probe '{"url":"https://example.com"}'
 
 Check `ok` before reading `data`. Do not set `OPSPILOT_HTTP_ALLOW_PRIVATE=true` outside a trusted internal environment.
 
-Do not fabricate tool results. When a command fails, preserve the returned error and continue with other read-only evidence when possible. Never expose Ark credentials in prompts, logs, or tool arguments.
+Do not fabricate tool results. When a command fails, preserve the returned error and continue with other read-only evidence when possible. Never expose Ark credentials in prompts, logs, or tool arguments. In MCP mode, treat stdout as protocol-only and send diagnostics to stderr.

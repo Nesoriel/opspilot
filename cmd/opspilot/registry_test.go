@@ -6,6 +6,7 @@ func TestBuildRegistryIncludesReadOnlyDiagnostics(t *testing.T) {
 	t.Setenv("OPSPILOT_HTTP_ALLOW_PRIVATE", "false")
 	t.Setenv("OPSPILOT_TLS_ALLOW_PRIVATE", "false")
 	t.Setenv("OPSPILOT_DOCKER_SOCKET", "")
+	t.Setenv("OPSPILOT_KUBECONFIG", "/definitely/not/loaded/during-registry-build")
 	registry, err := buildRegistry()
 	if err != nil {
 		t.Fatalf("build registry: %v", err)
@@ -18,6 +19,9 @@ func TestBuildRegistryIncludesReadOnlyDiagnostics(t *testing.T) {
 		"docker_container_list",
 		"docker_engine_info",
 		"http_probe",
+		"kubernetes_cluster_info",
+		"kubernetes_pod_inspect",
+		"kubernetes_pod_list",
 		"tls_inspect",
 	}
 	if len(definitions) != len(want) {

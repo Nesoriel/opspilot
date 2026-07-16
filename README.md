@@ -2,7 +2,7 @@
 
 OpsPilot is a code-first, safety-oriented operations agent implemented in Go. Its core runtime stays provider-neutral while adapters integrate with the Volcengine AI ecosystem.
 
-> Status: early development. The project includes a bounded Agent Runtime, an Ark Responses API adapter, an MCP stdio server, privacy-safe runtime events, optional OpenTelemetry tracing, and machine-readable, read-only network and container diagnostics.
+> Status: early development. The project includes a bounded Agent Runtime, an Ark Responses API adapter, an MCP stdio server, privacy-safe runtime events, optional OpenTelemetry tracing, and machine-readable, read-only network, Docker, and Kubernetes diagnostics.
 
 ## Design goals
 
@@ -20,6 +20,7 @@ OpsPilot is a code-first, safety-oriented operations agent implemented in Go. It
 - Strongly defined tool registry with duplicate and schema validation.
 - Read-only `dns_lookup`, SSRF-aware `http_probe`, and certificate-aware `tls_inspect` tools.
 - Read-only Docker Engine, container-list, and redacted container-inspect diagnostics over a local Unix socket.
+- Read-only Kubernetes server, node, Pod-list, and redacted Pod-inspect diagnostics through client-go v0.36.2.
 - Shared network guard that resolves and validates every dial target before connecting.
 - Machine-readable CLI intended for agents and automation.
 - JSONL lifecycle events with run IDs, step numbers, durations, and sanitized error classes.
@@ -52,7 +53,7 @@ export ARK_API_KEY='your-api-key'
 
 ```bash
 go run ./cmd/opspilot agent run \
-  'Check the local Docker Engine and identify unhealthy or stopped containers.'
+  'Check Kubernetes node readiness and identify unhealthy or restarting Pods in the operations namespace.'
 ```
 
 The command writes the final structured result to stdout. The Ark model can select from the registered read-only tools.
@@ -99,7 +100,9 @@ A typical MCP client configuration is:
       "env": {
         "OPSPILOT_HTTP_ALLOW_PRIVATE": "false",
         "OPSPILOT_TLS_ALLOW_PRIVATE": "false",
-        "OPSPILOT_DOCKER_SOCKET": "/var/run/docker.sock"
+        "OPSPILOT_DOCKER_SOCKET": "/var/run/docker.sock",
+        "OPSPILOT_KUBECONFIG": "/absolute/path/to/kubeconfig",
+        "OPSPILOT_KUBERNETES_CONTEXT": "production-readonly"
       }
     }
   }
@@ -129,6 +132,15 @@ go run ./cmd/opspilot tool run docker_container_list \
 
 go run ./cmd/opspilot tool run docker_container_inspect \
   '{"container":"web"}'
+
+go run ./cmd/opspilot tool run kubernetes_cluster_info \
+  '{"node_limit":100}'
+
+go run ./cmd/opspilot tool run kubernetes_pod_list \
+  '{"namespace":"operations","limit":100}'
+
+go run ./cmd/opspilot tool run kubernetes_pod_inspect \
+  '{"namespace":"operations","pod":"web-0","event_limit":50}'
 ```
 
 ### Docker diagnostic boundary
@@ -137,26 +149,51 @@ go run ./cmd/opspilot tool run docker_container_inspect \
 
 The Docker client negotiates the daemon API through `/version`, then performs bounded GET requests. It does not invoke the Docker CLI and does not expose mutating operations.
 
-`docker_container_inspect` returns a deliberate diagnostic projection rather than raw `docker inspect` output. It omits:
-
-- environment values;
-- commands and arguments;
-- raw labels;
-- health-check output;
-- Docker log paths;
-- bind-mount and volume source paths;
-- free-text OCI/runtime errors.
+`docker_container_inspect` returns a deliberate diagnostic projection rather than raw `docker inspect` output. It omits environment values, commands, arguments, raw labels, health-check output, Docker log paths, bind-mount and volume source paths, and free-text OCI/runtime errors.
 
 Engine warning text is also omitted; only `warning_count` is returned. Container runtime errors are represented by `error_present` without returning the raw text.
 
 Access to a Docker Unix socket is still a privileged host capability. OpsPilot's read-only implementation does not turn the socket itself into a read-only security boundary. Only grant the process access to a trusted local socket, and do not mount that socket into untrusted containers.
+
+### Kubernetes diagnostic boundary
+
+OpsPilot uses the official Kubernetes client-go v0.36.2. Kubernetes configuration is initialized lazily, so missing credentials do not prevent non-Kubernetes tools or the MCP server from starting.
+
+When running outside a cluster, set `OPSPILOT_KUBECONFIG` to an absolute kubeconfig path. `OPSPILOT_KUBERNETES_CONTEXT` optionally selects a context. When running inside Kubernetes without an explicit kubeconfig, OpsPilot uses the mounted ServiceAccount token and CA.
+
+Before constructing a Kubernetes client, OpsPilot rejects kubeconfigs that contain:
+
+- HTTP API servers;
+- `insecure-skip-tls-verify`;
+- kubeconfig proxy URLs;
+- exec credential plugins;
+- legacy auth-provider plugins;
+- user impersonation.
+
+The model cannot provide a kubeconfig path, API server URL, arbitrary resource type, selector, API path, or HTTP method in tool arguments.
+
+`kubernetes_pod_inspect` returns a deliberate projection rather than a raw Pod object. It omits environment values, commands, arguments, labels, annotations, volume source details, Secret and ConfigMap references, Pod logs, and all free-text condition, container-state, Pod-status, and Event messages. Event output is aggregated by `type` and `reason` only.
+
+Apply the included minimum RBAC objects for an in-cluster deployment:
+
+```bash
+kubectl apply -f deploy/kubernetes/opspilot-readonly-rbac.yaml
+```
+
+The role grants only:
+
+- GET on `/version`;
+- GET/LIST on Nodes and Pods;
+- LIST on Events.
+
+It does not grant Secret access or the `pods/log` subresource.
 
 Private, loopback, link-local, multicast, and unspecified HTTP/TLS targets are blocked by default. Set `OPSPILOT_HTTP_ALLOW_PRIVATE=true` or `OPSPILOT_TLS_ALLOW_PRIVATE=true` only in a trusted environment where internal service diagnostics are intended.
 
 ## Roadmap
 
 1. MCP client support and richer Agent skill packaging.
-2. Kubernetes, Prometheus, and Loki diagnostics.
+2. Prometheus and Loki diagnostics.
 3. PostgreSQL task state and VikingDB retrieval.
 4. Approval gates, AgentKit/VKE deployment, and production evaluation.
 

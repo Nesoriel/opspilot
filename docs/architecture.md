@@ -24,9 +24,9 @@ OpenClaw / Hermes / MCP client / API / CLI
         |         |          |
         v         v          v
       Models    Tools    Observability
-      Ark/Eino  built-in JSONL events
+      Ark/Eino  network  JSONL events
       others    Docker   OpenTelemetry
-                network
+                K8s
         |         |          |
         v         v          v
       Volcengine local and  OTLP collector
@@ -38,6 +38,7 @@ OpenClaw / Hermes / MCP client / API / CLI
 - `internal/agent`: provider-neutral messages, model/tool contracts, registry, bounded runtime, and lifecycle event definitions.
 - `internal/models`: provider adapters such as the Ark Responses API adapter. Provider SDKs must not enter `internal/agent`.
 - `internal/dockerapi`: a bounded, read-only Docker Engine API adapter over a trusted local Unix socket. It owns API negotiation, transport errors, response limits, and redacted response projections.
+- `internal/kubeapi`: a lazy, bounded, read-only Kubernetes adapter built on official client-go. It owns safe configuration loading, API error classification, fixed resource queries, and redacted response projections.
 - `internal/tools`: read-only operational tools. Tools must validate JSON strictly and respect `context.Context`.
 - `internal/mcpserver`: adapts the shared Registry to the official MCP Go SDK without duplicating tool implementations.
 - `internal/observability`: observer composition, privacy-safe JSONL records, and OpenTelemetry span translation.
@@ -50,7 +51,7 @@ The MCP server is a transport adapter, not a second execution engine.
 
 - Tool names, descriptions, and JSON Schemas come from `agent.Registry`.
 - MCP calls execute the same `agent.Tool` implementation used by the CLI and Agent Runtime.
-- Published annotations mark current tools as read-only and idempotent; network and Docker tools are conservatively marked open-world because they interact with systems outside the process.
+- Published annotations mark current tools as read-only and idempotent; network, Docker, and Kubernetes tools are conservatively marked open-world because they interact with systems outside the process.
 - Each MCP tool call is bounded by context cancellation and a server-side timeout.
 - JSON object results are returned as both text content and MCP structured content.
 - Tool failures use `CallToolResult.IsError`; unknown tool names remain protocol-level errors.
@@ -73,6 +74,25 @@ Docker support is split between a transport/API adapter and Agent-facing tools.
 
 Container logs are intentionally outside this first boundary because they frequently contain credentials, request data, database records, and other application output. A future log tool requires explicit line/byte limits, timestamp controls, and a separate redaction policy.
 
+## Kubernetes boundary
+
+Kubernetes support uses the official client-go adapter behind fixed Agent tools.
+
+- Client initialization is lazy. A missing or invalid cluster configuration does not prevent non-Kubernetes tools, CLI discovery, or the MCP server from starting.
+- Outside a cluster, an explicit absolute kubeconfig path or the standard kubeconfig loading rules may be used. Inside a cluster, the mounted ServiceAccount token and CA are used.
+- Raw kubeconfig is validated before client-go constructs transports. HTTP API servers, insecure TLS verification, proxy URLs, exec credential plugins, legacy auth-provider plugins, and user impersonation are rejected.
+- Proxy use is explicitly disabled in the resulting REST configuration, including ambient HTTP proxy environment variables.
+- The client applies request timeouts, QPS, burst, list limits, and a fixed user agent.
+- The Agent cannot provide an API server URL, kubeconfig path, context, resource type, selector, arbitrary API path, or HTTP method in tool arguments.
+- The first fixed queries are server version, Nodes, Pods, one Pod, and Events associated with that Pod UID.
+- Pod and node lists are limited at the API layer and again in the tool layer.
+- Raw Kubernetes objects are never returned. Labels, annotations, environment values, commands, arguments, volume source details, Secret and ConfigMap references, logs, and free-text status/condition/container/Event messages are excluded.
+- Event output is aggregated by type and reason. Machine-classified reasons and exit codes are retained; free-text messages are not.
+- Generic API error classes are returned without raw server messages, bearer tokens, URLs, object paths, or admission details.
+- A minimal ClusterRole grants only GET on `/version`, GET/LIST on Nodes and Pods, and LIST on Events. It excludes Secrets and `pods/log`.
+
+RBAC is the cluster-enforced boundary. Code-level GET-only behavior and projection redaction complement RBAC but do not replace it.
+
 ## Observability boundary
 
 The Agent Runtime emits provider-neutral lifecycle events with a run ID, timestamp, duration, step, tool name, call ID, and error value. Observers translate these events for different consumers.
@@ -90,10 +110,11 @@ The Agent Runtime emits provider-neutral lifecycle events with a run ID, timesta
 3. Every call has a timeout and a bounded Agent run has a maximum step count.
 4. Network tools deny private, loopback, link-local, multicast, and unspecified targets unless a trusted deployment explicitly enables them.
 5. Docker tools require a trusted local Unix socket and expose only a fixed allowlist of GET operations and output fields.
-6. Tool failures are returned to the model or MCP client as structured data; they do not silently disappear.
-7. Future mutating tools must pass policy evaluation and an approval checkpoint before execution.
-8. Observability metadata must not become a covert channel for prompts, credentials, or complete tool data.
-9. Protocol transports must keep framing channels free from unrelated logs or diagnostics.
+6. Kubernetes tools require validated trusted credentials, fixed resource queries, redacted projections, and least-privilege RBAC.
+7. Tool failures are returned to the model or MCP client as structured data; they do not silently disappear.
+8. Future mutating tools must pass policy evaluation and an approval checkpoint before execution.
+9. Observability metadata must not become a covert channel for prompts, credentials, or complete tool data.
+10. Protocol transports must keep framing channels free from unrelated logs or diagnostics.
 
 ## Volcengine integration plan
 

@@ -27,8 +27,9 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if err := run(ctx, os.Args[1:], os.Stdout, os.Stderr); err != nil {
-		writeJSON(os.Stdout, map[string]any{"ok": false, "error": err.Error()})
+	args := os.Args[1:]
+	if err := run(ctx, args, os.Stdout, os.Stderr); err != nil {
+		reportCommandError(args, os.Stdout, os.Stderr, err)
 		os.Exit(1)
 	}
 }
@@ -46,6 +47,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return runTool(ctx, args[1:], stdout, stderr)
 	case "agent":
 		return runAgent(ctx, args[1:], stdout, stderr)
+	case "mcp":
+		return runMCP(ctx, args[1:], stderr)
 	default:
 		printUsage(stderr)
 		return fmt.Errorf("unknown command %q", args[0])
@@ -172,6 +175,14 @@ func buildRegistry() (*agent.Registry, error) {
 	return registry, nil
 }
 
+func reportCommandError(args []string, stdout, stderr io.Writer, err error) {
+	if isMCPCommand(args) {
+		fmt.Fprintf(stderr, "opspilot: %v\n", err)
+		return
+	}
+	_ = writeJSON(stdout, map[string]any{"ok": false, "error": err.Error()})
+}
+
 func writeJSON(writer io.Writer, value any) error {
 	encoder := json.NewEncoder(writer)
 	encoder.SetIndent("", "  ")
@@ -179,7 +190,7 @@ func writeJSON(writer io.Writer, value any) error {
 }
 
 func printUsage(writer io.Writer) {
-	fmt.Fprintln(writer, "usage: opspilot <version|tool|agent>")
+	fmt.Fprintln(writer, "usage: opspilot <version|tool|agent|mcp>")
 }
 
 func printToolUsage(writer io.Writer) {

@@ -9,15 +9,19 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/Nesoriel/opspilot/internal/agent"
+	arkmodel "github.com/Nesoriel/opspilot/internal/models/ark"
 	"github.com/Nesoriel/opspilot/internal/tools/dnslookup"
 	"github.com/Nesoriel/opspilot/internal/tools/httpprobe"
 )
 
 var version = "dev"
+
+const defaultSystemPrompt = `You are OpsPilot, a safety-oriented operations diagnostic agent. Use read-only tools to collect evidence before making claims. Clearly separate observed evidence, inference, and uncertainty. Never invent tool results.`
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -40,10 +44,53 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return writeJSON(stdout, map[string]any{"name": "opspilot", "version": version})
 	case "tool":
 		return runTool(ctx, args[1:], stdout, stderr)
+	case "agent":
+		return runAgent(ctx, args[1:], stdout, stderr)
 	default:
 		printUsage(stderr)
 		return fmt.Errorf("unknown command %q", args[0])
 	}
+}
+
+func runAgent(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	if len(args) == 0 || args[0] != "run" {
+		printAgentUsage(stderr)
+		return errors.New("agent run command is required")
+	}
+	prompt := strings.TrimSpace(strings.Join(args[1:], " "))
+	if prompt == "" {
+		return errors.New("agent prompt is required")
+	}
+
+	config, err := arkmodel.ConfigFromEnv()
+	if err != nil {
+		return err
+	}
+	model, err := arkmodel.New(ctx, config)
+	if err != nil {
+		return fmt.Errorf("initialize Ark model: %w", err)
+	}
+	registry, err := buildRegistry()
+	if err != nil {
+		return err
+	}
+	runtime, err := agent.NewRuntime(model, registry)
+	if err != nil {
+		return err
+	}
+
+	systemPrompt := strings.TrimSpace(os.Getenv("OPSPILOT_SYSTEM_PROMPT"))
+	if systemPrompt == "" {
+		systemPrompt = defaultSystemPrompt
+	}
+	result, err := runtime.Run(ctx, []agent.Message{
+		{Role: agent.RoleSystem, Content: systemPrompt},
+		{Role: agent.RoleUser, Content: prompt},
+	})
+	if err != nil {
+		return err
+	}
+	return writeJSON(stdout, map[string]any{"ok": true, "result": result})
 }
 
 func runTool(ctx context.Context, args []string, stdout, stderr io.Writer) error {
@@ -123,9 +170,13 @@ func writeJSON(writer io.Writer, value any) error {
 }
 
 func printUsage(writer io.Writer) {
-	fmt.Fprintln(writer, "usage: opspilot <version|tool>")
+	fmt.Fprintln(writer, "usage: opspilot <version|tool|agent>")
 }
 
 func printToolUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "usage: opspilot tool <list|run TOOL [JSON]>")
+}
+
+func printAgentUsage(writer io.Writer) {
+	fmt.Fprintln(writer, "usage: opspilot agent run PROMPT")
 }

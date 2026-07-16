@@ -16,7 +16,7 @@ type PodInspectTool struct {
 type podInspectInput struct {
 	Namespace  string `json:"namespace,omitempty"`
 	Pod        string `json:"pod"`
-	EventLimit int    `json:"event_limit,omitempty"`
+	EventLimit *int   `json:"event_limit,omitempty"`
 }
 
 func NewPodInspect(client Client) *PodInspectTool {
@@ -32,7 +32,7 @@ func (t *PodInspectTool) Definition() agent.ToolDefinition {
 }
 
 func (t *PodInspectTool) Execute(ctx context.Context, arguments json.RawMessage) (json.RawMessage, error) {
-	input := podInspectInput{EventLimit: defaultEventLimit}
+	var input podInspectInput
 	if err := decodeStrict(arguments, &input); err != nil {
 		return nil, err
 	}
@@ -47,13 +47,14 @@ func (t *PodInspectTool) Execute(ctx context.Context, arguments json.RawMessage)
 	if err := validatePodName(input.Pod); err != nil {
 		return nil, err
 	}
-	if input.EventLimit == 0 {
-		input.EventLimit = defaultEventLimit
+	eventLimit := defaultEventLimit
+	if input.EventLimit != nil {
+		eventLimit = *input.EventLimit
 	}
-	if input.EventLimit < 1 || input.EventLimit > maxEventLimit {
+	if eventLimit < 1 || eventLimit > maxEventLimit {
 		return nil, errors.New("event_limit must be between 1 and 100")
 	}
-	result, err := t.client.PodInspect(ctx, input.Namespace, input.Pod, int64(input.EventLimit))
+	result, err := t.client.PodInspect(ctx, input.Namespace, input.Pod, int64(eventLimit))
 	if err != nil {
 		return nil, err
 	}

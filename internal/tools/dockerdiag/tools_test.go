@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Nesoriel/opspilot/internal/agent"
 	"github.com/Nesoriel/opspilot/internal/dockerapi"
 )
 
@@ -112,25 +113,25 @@ func TestContainerInspectToolTrimsIdentifierAndPropagatesErrors(t *testing.T) {
 	}
 }
 
-func TestToolDefinitionsRemainReadOnlySchemas(t *testing.T) {
+func TestToolDefinitionsAreValidAndDistinct(t *testing.T) {
 	client := &fakeClient{}
-	for _, tool := range []interface {
-		Definition() struct {
-			Name        string
-			Description string
-			InputSchema json.RawMessage
+	tools := []agent.Tool{
+		NewEngineInfo(client),
+		NewContainerList(client),
+		NewContainerInspect(client),
+	}
+	seen := make(map[string]struct{}, len(tools))
+	for _, tool := range tools {
+		definition := tool.Definition()
+		if definition.Name == "" || definition.Description == "" {
+			t.Fatalf("incomplete tool definition: %#v", definition)
 		}
-	}{} {
-		_ = tool
-	}
-	definitions := []json.RawMessage{
-		NewEngineInfo(client).Definition().InputSchema,
-		NewContainerList(client).Definition().InputSchema,
-		NewContainerInspect(client).Definition().InputSchema,
-	}
-	for _, schema := range definitions {
-		if !json.Valid(schema) || !strings.Contains(string(schema), `"type":"object"`) {
-			t.Fatalf("invalid tool schema: %s", schema)
+		if _, exists := seen[definition.Name]; exists {
+			t.Fatalf("duplicate tool name %q", definition.Name)
+		}
+		seen[definition.Name] = struct{}{}
+		if !json.Valid(definition.InputSchema) || !strings.Contains(string(definition.InputSchema), `"type":"object"`) {
+			t.Fatalf("invalid tool schema for %s: %s", definition.Name, definition.InputSchema)
 		}
 	}
 }

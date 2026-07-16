@@ -266,10 +266,10 @@ func verifyPeer(chain []*x509.Certificate, serverName string, roots *x509.CertPo
 		intermediates.AddCert(cert)
 	}
 	_, err := chain[0].Verify(x509.VerifyOptions{
-		DNSName:      serverName,
+		DNSName:       serverName,
 		Intermediates: intermediates,
-		Roots:        roots,
-		CurrentTime:  now,
+		Roots:         roots,
+		CurrentTime:   now,
 	})
 	if err == nil {
 		return true, nil

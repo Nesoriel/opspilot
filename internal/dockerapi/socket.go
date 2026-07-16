@@ -28,7 +28,6 @@ type Config struct {
 
 type Client struct {
 	httpClient       *http.Client
-	socketPath       string
 	maxResponseBytes int64
 	versionCache     versionCache
 }
@@ -53,11 +52,7 @@ func New(config Config) (*Client, error) {
 		IdleConnTimeout:       30 * time.Second,
 		ResponseHeaderTimeout: config.Timeout,
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			connection, err := dialer.DialContext(ctx, "unix", socketPath)
-			if err != nil {
-				return nil, classifyTransportError("connect Docker Engine", err)
-			}
-			return connection, nil
+			return dialer.DialContext(ctx, "unix", socketPath)
 		},
 	}
 
@@ -66,7 +61,6 @@ func New(config Config) (*Client, error) {
 			Transport: transport,
 			Timeout:   config.Timeout,
 		},
-		socketPath:       socketPath,
 		maxResponseBytes: config.MaxResponseBytes,
 	}, nil
 }

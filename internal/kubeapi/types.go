@@ -11,10 +11,10 @@ import (
 )
 
 type ClusterInfo struct {
-	Version    ServerVersion `json:"version"`
-	NodeCount  int           `json:"node_count"`
-	Truncated  bool          `json:"truncated"`
-	Nodes      []NodeSummary `json:"nodes"`
+	Version   ServerVersion `json:"version"`
+	NodeCount int           `json:"node_count"`
+	Truncated bool          `json:"truncated"`
+	Nodes     []NodeSummary `json:"nodes"`
 }
 
 type ServerVersion struct {
@@ -62,39 +62,39 @@ type PodList struct {
 }
 
 type PodSummary struct {
-	Namespace        string `json:"namespace"`
-	Name             string `json:"name"`
-	CreatedAt        string `json:"created_at,omitempty"`
-	Phase            string `json:"phase"`
-	Reason           string `json:"reason,omitempty"`
-	Ready            bool   `json:"ready"`
-	NodeName         string `json:"node_name,omitempty"`
-	PodIP            string `json:"pod_ip,omitempty"`
-	QoSClass         string `json:"qos_class,omitempty"`
-	RestartCount     int32  `json:"restart_count"`
-	ContainersReady  int    `json:"containers_ready"`
-	ContainersTotal  int    `json:"containers_total"`
-	InitReady         int    `json:"init_ready"`
-	InitTotal         int    `json:"init_total"`
+	Namespace       string `json:"namespace"`
+	Name            string `json:"name"`
+	CreatedAt       string `json:"created_at,omitempty"`
+	Phase           string `json:"phase"`
+	Reason          string `json:"reason,omitempty"`
+	Ready           bool   `json:"ready"`
+	NodeName        string `json:"node_name,omitempty"`
+	PodIP           string `json:"pod_ip,omitempty"`
+	QoSClass        string `json:"qos_class,omitempty"`
+	RestartCount    int32  `json:"restart_count"`
+	ContainersReady int    `json:"containers_ready"`
+	ContainersTotal int    `json:"containers_total"`
+	InitReady       int    `json:"init_ready"`
+	InitTotal       int    `json:"init_total"`
 }
 
 type PodInspect struct {
-	Summary              PodSummary             `json:"summary"`
-	ServiceAccountName   string                 `json:"service_account_name,omitempty"`
-	PriorityClassName    string                 `json:"priority_class_name,omitempty"`
-	RestartPolicy        string                 `json:"restart_policy,omitempty"`
-	DNSPolicy            string                 `json:"dns_policy,omitempty"`
-	SchedulerName        string                 `json:"scheduler_name,omitempty"`
-	HostNetwork          bool                   `json:"host_network"`
-	Owners               []OwnerSummary         `json:"owners,omitempty"`
-	Conditions           []ConditionSummary     `json:"conditions,omitempty"`
-	Containers           []ContainerSpecSummary `json:"containers,omitempty"`
-	InitContainers       []ContainerSpecSummary `json:"init_containers,omitempty"`
-	ContainerStatuses    []ContainerStatus      `json:"container_statuses,omitempty"`
-	InitContainerStatuses []ContainerStatus     `json:"init_container_statuses,omitempty"`
-	EventCount           int                    `json:"event_count"`
-	EventsTruncated      bool                   `json:"events_truncated"`
-	Events               []EventSummary         `json:"events,omitempty"`
+	Summary               PodSummary             `json:"summary"`
+	ServiceAccountName    string                 `json:"service_account_name,omitempty"`
+	PriorityClassName     string                 `json:"priority_class_name,omitempty"`
+	RestartPolicy         string                 `json:"restart_policy,omitempty"`
+	DNSPolicy             string                 `json:"dns_policy,omitempty"`
+	SchedulerName         string                 `json:"scheduler_name,omitempty"`
+	HostNetwork           bool                   `json:"host_network"`
+	Owners                []OwnerSummary         `json:"owners,omitempty"`
+	Conditions            []ConditionSummary     `json:"conditions,omitempty"`
+	Containers            []ContainerSpecSummary `json:"containers,omitempty"`
+	InitContainers        []ContainerSpecSummary `json:"init_containers,omitempty"`
+	ContainerStatuses     []ContainerStatus      `json:"container_statuses,omitempty"`
+	InitContainerStatuses []ContainerStatus      `json:"init_container_statuses,omitempty"`
+	EventCount            int                    `json:"event_count"`
+	EventsTruncated       bool                   `json:"events_truncated"`
+	Events                []EventSummary         `json:"events,omitempty"`
 }
 
 type OwnerSummary struct {

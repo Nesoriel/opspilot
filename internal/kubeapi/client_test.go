@@ -10,8 +10,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/version"
@@ -64,7 +64,7 @@ func TestClientMapsClusterPodsAndEvents(t *testing.T) {
 			CreationTimestamp: now,
 			Labels:            map[string]string{"secret-label": "private-label"},
 			Annotations:       map[string]string{"secret-annotation": "private-annotation"},
-			OwnerReferences: []metav1.OwnerReference{{Kind: "StatefulSet", Name: "web", Controller: &controller}},
+			OwnerReferences:   []metav1.OwnerReference{{Kind: "StatefulSet", Name: "web", Controller: &controller}},
 		},
 		Spec: corev1.PodSpec{
 			NodeName:           "node-b",
@@ -86,22 +86,22 @@ func TestClientMapsClusterPodsAndEvents(t *testing.T) {
 				SecurityContext: &corev1.SecurityContext{Privileged: &privileged, ReadOnlyRootFilesystem: &readOnly, RunAsNonRoot: &runAsNonRoot},
 			}},
 			InitContainers: []corev1.Container{{Name: "migrate", Image: "example/migrate:v2", Env: []corev1.EnvVar{{Name: "TOKEN", Value: "init-secret"}}}},
-			Volumes: []corev1.Volume{{Name: "credentials", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: "database-credentials"}}}},
+			Volumes:        []corev1.Volume{{Name: "credentials", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: "database-credentials"}}}},
 		},
 		Status: corev1.PodStatus{
-			Phase:  corev1.PodRunning,
-			Reason: "Running",
-			Message: "free-text pod message with pod-secret",
-			PodIP:   "10.244.0.12",
-			QOSClass: corev1.PodQOSBurstable,
+			Phase:      corev1.PodRunning,
+			Reason:     "Running",
+			Message:    "free-text pod message with pod-secret",
+			PodIP:      "10.244.0.12",
+			QOSClass:   corev1.PodQOSBurstable,
 			Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionFalse, Reason: "ContainersNotReady", Message: "condition-secret", LastTransitionTime: now}},
 			ContainerStatuses: []corev1.ContainerStatus{{
-				Name:         "web",
-				Image:        "example/web:v2",
-				Ready:        false,
-				Started:      &started,
-				RestartCount: 3,
-				State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff", Message: "waiting-secret"}},
+				Name:                 "web",
+				Image:                "example/web:v2",
+				Ready:                false,
+				Started:              &started,
+				RestartCount:         3,
+				State:                corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff", Message: "waiting-secret"}},
 				LastTerminationState: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Error", ExitCode: 1, Message: "termination-secret"}},
 			}},
 			InitContainerStatuses: []corev1.ContainerStatus{{Name: "migrate", Image: "example/migrate:v2", Ready: true, State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Completed", ExitCode: 0}}}},

@@ -3,6 +3,7 @@ package promapi
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -197,6 +198,10 @@ func mapVector(data rawQueryData, labelAllowlist map[string]struct{}, limit int)
 		if err := json.Unmarshal(item.Value[0], &timestamp); err != nil {
 			return nil, false, fmt.Errorf("prometheus_invalid_response: vector timestamp is invalid")
 		}
+		formattedTimestamp, err := formatSampleTimestamp(timestamp)
+		if err != nil {
+			return nil, false, err
+		}
 		var value string
 		if err := json.Unmarshal(item.Value[1], &value); err != nil {
 			return nil, false, fmt.Errorf("prometheus_invalid_response: vector sample value is invalid")
@@ -209,7 +214,7 @@ func mapVector(data rawQueryData, labelAllowlist map[string]struct{}, limit int)
 		}
 		series = append(series, MetricSeries{
 			Labels:    labels,
-			Timestamp: time.Unix(0, int64(timestamp*float64(time.Second))).UTC().Format(time.RFC3339Nano),
+			Timestamp: formattedTimestamp,
 			Value:     sanitizeSampleValue(value),
 		})
 	}
@@ -226,6 +231,21 @@ func mapVector(data rawQueryData, labelAllowlist map[string]struct{}, limit int)
 		series = series[:limit]
 	}
 	return series, truncated, nil
+}
+
+func formatSampleTimestamp(timestamp float64) (string, error) {
+	if math.IsNaN(timestamp) || math.IsInf(timestamp, 0) {
+		return "", fmt.Errorf("prometheus_invalid_response: vector timestamp is not finite")
+	}
+	seconds, fraction := math.Modf(timestamp)
+	if seconds < -62135596800 || seconds > 253402300799 {
+		return "", fmt.Errorf("prometheus_invalid_response: vector timestamp is outside the supported range")
+	}
+	parsed := time.Unix(int64(seconds), int64(math.Round(fraction*float64(time.Second)))).UTC()
+	if parsed.Year() < 1 || parsed.Year() > 9999 {
+		return "", fmt.Errorf("prometheus_invalid_response: vector timestamp is outside the supported range")
+	}
+	return parsed.Format(time.RFC3339Nano), nil
 }
 
 func canonicalLabels(labels map[string]string) string {

@@ -178,11 +178,13 @@ func validAPIVersion(value string) bool {
 		return false
 	}
 	for _, part := range parts {
-		if part == "" {
+		if part == "" || len(part) > 6 {
 			return false
 		}
-		if _, err := strconv.Atoi(part); err != nil {
-			return false
+		for _, character := range part {
+			if character < '0' || character > '9' {
+				return false
+			}
 		}
 	}
 	return true
@@ -209,8 +211,9 @@ func validateContainerIdentifier(value string) error {
 }
 
 func truncate(value string, limit int) string {
-	if len(value) <= limit {
+	characters := []rune(value)
+	if len(characters) <= limit {
 		return value
 	}
-	return value[:limit] + "..."
+	return string(characters[:limit]) + "..."
 }

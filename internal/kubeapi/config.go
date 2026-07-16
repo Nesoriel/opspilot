@@ -2,7 +2,6 @@ package kubeapi
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -172,11 +171,4 @@ func readInClusterNamespace() string {
 		return defaultNamespace
 	}
 	return namespace
-}
-
-func configSummary(config Config) string {
-	if strings.TrimSpace(config.KubeconfigPath) != "" {
-		return fmt.Sprintf("kubeconfig context %q", strings.TrimSpace(config.Context))
-	}
-	return "in-cluster or default kubeconfig"
 }

@@ -18,7 +18,18 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Resolve modules
-        run: go mod tidy
+        id: tidy
+        continue-on-error: true
+        run: go mod tidy >tidy.log 2>&1
+      - name: Upload module resolution log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: module-resolution-log
+          path: tidy.log
+      - name: Fail on module resolution error
+        if: steps.tidy.outcome == 'failure'
+        run: exit 1
       - name: Format source
         run: gofmt -w .
       - name: Upload generated Go files

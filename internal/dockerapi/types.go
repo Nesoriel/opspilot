@@ -49,16 +49,16 @@ type ContainerListOptions struct {
 }
 
 type ContainerSummary struct {
-	ID        string          `json:"id"`
-	Names     []string        `json:"names"`
-	Image     string          `json:"image"`
-	ImageID   string          `json:"image_id,omitempty"`
-	CreatedAt string          `json:"created_at"`
-	State     string          `json:"state"`
-	Status    string          `json:"status"`
-	Health    *HealthSummary  `json:"health,omitempty"`
-	Ports     []Port          `json:"ports,omitempty"`
-	Networks  []Network       `json:"networks,omitempty"`
+	ID        string         `json:"id"`
+	Names     []string       `json:"names"`
+	Image     string         `json:"image"`
+	ImageID   string         `json:"image_id,omitempty"`
+	CreatedAt string         `json:"created_at"`
+	State     string         `json:"state"`
+	Status    string         `json:"status"`
+	Health    *HealthSummary `json:"health,omitempty"`
+	Ports     []Port         `json:"ports,omitempty"`
+	Networks  []Network      `json:"networks,omitempty"`
 }
 
 type HealthSummary struct {
@@ -81,47 +81,47 @@ type Network struct {
 }
 
 type ContainerInspect struct {
-	ID             string              `json:"id"`
-	Name           string              `json:"name"`
-	ImageID        string              `json:"image_id"`
+	ID              string             `json:"id"`
+	Name            string             `json:"name"`
+	ImageID         string             `json:"image_id"`
 	ConfiguredImage string             `json:"configured_image,omitempty"`
-	CreatedAt      string              `json:"created_at"`
-	Driver         string              `json:"driver,omitempty"`
-	Platform       string              `json:"platform,omitempty"`
-	RestartCount   int                 `json:"restart_count"`
-	State          ContainerState      `json:"state"`
-	Runtime        ContainerRuntime    `json:"runtime"`
-	Resources      ContainerResources  `json:"resources"`
-	Networks       []Network           `json:"networks,omitempty"`
-	Ports          []PortBinding       `json:"ports,omitempty"`
-	Mounts         []Mount             `json:"mounts,omitempty"`
+	CreatedAt       string             `json:"created_at"`
+	Driver          string             `json:"driver,omitempty"`
+	Platform        string             `json:"platform,omitempty"`
+	RestartCount    int                `json:"restart_count"`
+	State           ContainerState     `json:"state"`
+	Runtime         ContainerRuntime   `json:"runtime"`
+	Resources       ContainerResources `json:"resources"`
+	Networks        []Network          `json:"networks,omitempty"`
+	Ports           []PortBinding      `json:"ports,omitempty"`
+	Mounts          []Mount            `json:"mounts,omitempty"`
 }
 
 type ContainerState struct {
-	Status        string         `json:"status"`
-	Running       bool           `json:"running"`
-	Paused        bool           `json:"paused"`
-	Restarting    bool           `json:"restarting"`
-	OOMKilled     bool           `json:"oom_killed"`
-	Dead          bool           `json:"dead"`
-	PID           int            `json:"pid,omitempty"`
-	ExitCode      int            `json:"exit_code"`
-	Error         string         `json:"error,omitempty"`
-	StartedAt     string         `json:"started_at,omitempty"`
-	FinishedAt    string         `json:"finished_at,omitempty"`
-	Health        *HealthSummary `json:"health,omitempty"`
+	Status     string         `json:"status"`
+	Running    bool           `json:"running"`
+	Paused     bool           `json:"paused"`
+	Restarting bool           `json:"restarting"`
+	OOMKilled  bool           `json:"oom_killed"`
+	Dead       bool           `json:"dead"`
+	PID        int            `json:"pid,omitempty"`
+	ExitCode   int            `json:"exit_code"`
+	Error      string         `json:"error,omitempty"`
+	StartedAt  string         `json:"started_at,omitempty"`
+	FinishedAt string         `json:"finished_at,omitempty"`
+	Health     *HealthSummary `json:"health,omitempty"`
 }
 
 type ContainerRuntime struct {
-	NetworkMode     string `json:"network_mode,omitempty"`
-	RestartPolicy   string `json:"restart_policy,omitempty"`
-	MaximumRetries  int    `json:"maximum_retries,omitempty"`
-	AutoRemove      bool   `json:"auto_remove"`
-	Privileged      bool   `json:"privileged"`
-	ReadonlyRootFS  bool   `json:"readonly_rootfs"`
-	User            string `json:"user,omitempty"`
-	WorkingDir      string `json:"working_dir,omitempty"`
-	StopSignal      string `json:"stop_signal,omitempty"`
+	NetworkMode    string `json:"network_mode,omitempty"`
+	RestartPolicy  string `json:"restart_policy,omitempty"`
+	MaximumRetries int    `json:"maximum_retries,omitempty"`
+	AutoRemove     bool   `json:"auto_remove"`
+	Privileged     bool   `json:"privileged"`
+	ReadonlyRootFS bool   `json:"readonly_rootfs"`
+	User           string `json:"user,omitempty"`
+	WorkingDir     string `json:"working_dir,omitempty"`
+	StopSignal     string `json:"stop_signal,omitempty"`
 }
 
 type ContainerResources struct {
@@ -180,15 +180,15 @@ type rawInfo struct {
 }
 
 type rawContainerSummary struct {
-	ID        string `json:"Id"`
-	Names     []string
-	Image     string
-	ImageID   string
-	Created   int64
-	State     string
-	Status    string
-	Health    *rawHealthSummary `json:"Health"`
-	Ports     []rawPort
+	ID              string `json:"Id"`
+	Names           []string
+	Image           string
+	ImageID         string
+	Created         int64
+	State           string
+	Status          string
+	Health          *rawHealthSummary `json:"Health"`
+	Ports           []rawPort
 	NetworkSettings *struct {
 		Networks map[string]rawNetwork `json:"Networks"`
 	} `json:"NetworkSettings"`
@@ -221,21 +221,21 @@ type rawContainerInspect struct {
 	Driver       string
 	Platform     string
 	State        *struct {
-		Status        string
-		Running       bool
-		Paused        bool
-		Restarting    bool
-		OOMKilled     bool
-		Dead          bool
-		Pid           int
-		ExitCode      int
-		Error         string
-		StartedAt     string
-		FinishedAt    string
-		Health        *rawHealthSummary
+		Status     string
+		Running    bool
+		Paused     bool
+		Restarting bool
+		OOMKilled  bool
+		Dead       bool
+		Pid        int
+		ExitCode   int
+		Error      string
+		StartedAt  string
+		FinishedAt string
+		Health     *rawHealthSummary
 	}
 	HostConfig *struct {
-		NetworkMode    string
+		NetworkMode   string
 		RestartPolicy struct {
 			Name              string
 			MaximumRetryCount int

@@ -47,11 +47,11 @@ func New(config Config) (*Client, error) {
 
 	dialer := net.Dialer{Timeout: config.Timeout}
 	transport := &http.Transport{
-		Proxy:                  nil,
-		DisableCompression:     true,
-		MaxIdleConns:           4,
-		IdleConnTimeout:        30 * time.Second,
-		ResponseHeaderTimeout:  config.Timeout,
+		Proxy:                 nil,
+		DisableCompression:    true,
+		MaxIdleConns:          4,
+		IdleConnTimeout:       30 * time.Second,
+		ResponseHeaderTimeout: config.Timeout,
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 			connection, err := dialer.DialContext(ctx, "unix", socketPath)
 			if err != nil {

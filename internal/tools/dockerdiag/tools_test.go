@@ -114,11 +114,13 @@ func TestContainerInspectToolTrimsIdentifierAndPropagatesErrors(t *testing.T) {
 
 func TestToolDefinitionsRemainReadOnlySchemas(t *testing.T) {
 	client := &fakeClient{}
-	for _, tool := range []interface{ Definition() struct {
-		Name        string
-		Description string
-		InputSchema json.RawMessage
-	} }{} {
+	for _, tool := range []interface {
+		Definition() struct {
+			Name        string
+			Description string
+			InputSchema json.RawMessage
+		}
+	}{} {
 		_ = tool
 	}
 	definitions := []json.RawMessage{

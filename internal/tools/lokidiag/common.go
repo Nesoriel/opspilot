@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 
 	"github.com/Nesoriel/opspilot/internal/lokiapi"
 )
@@ -20,7 +21,8 @@ func decodeStrict(arguments json.RawMessage, output any) error {
 	if err := decoder.Decode(output); err != nil {
 		return errors.New("loki_tool_invalid_arguments: arguments must match the tool schema")
 	}
-	if decoder.More() {
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
 		return errors.New("loki_tool_invalid_arguments: multiple JSON values are not allowed")
 	}
 	return nil

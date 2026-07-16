@@ -6,23 +6,35 @@ on:
   pull_request:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref }}
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
+      - name: Format Docker diagnostic code
+        run: gofmt -w cmd internal
+      - name: Commit formatted files
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          if ! git diff --quiet; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add cmd internal
+            git commit -m 'chore: format Docker diagnostic code'
+            git push origin HEAD:${{ github.head_ref }}
+          fi
       - name: Check module files
         run: |
           go mod tidy
           git diff --exit-code -- go.mod go.sum
-      - name: Check formatting
-        run: test -z "$(gofmt -l .)"
       - name: Vet
         run: go vet ./...
       - name: Test

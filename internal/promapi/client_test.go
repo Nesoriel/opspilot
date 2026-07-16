@@ -57,13 +57,13 @@ func TestClientMapsRedactedServerTargetsAndMetricSnapshot(t *testing.T) {
 			writeEnvelope(t, writer, map[string]any{
 				"activeTargets": []map[string]any{
 					{
-						"discoveredLabels": map[string]string{"__address__": "secret.internal:9100", "token": "secret-label"},
-						"labels":           map[string]string{"job": "node", "instance": "node-b:9100", "secret": "do-not-return"},
-						"scrapePool":       "node",
-						"scrapeUrl":        "http://user:password@secret.internal:9100/metrics?token=secret",
-						"globalUrl":        "https://prometheus.example/graph?g0.expr=secret",
-						"lastError":        "dial /private/path with password=secret",
-						"lastScrape":       "2026-07-16T11:59:30Z",
+						"discoveredLabels":   map[string]string{"__address__": "secret.internal:9100", "token": "secret-label"},
+						"labels":             map[string]string{"job": "node", "instance": "node-b:9100", "secret": "do-not-return"},
+						"scrapePool":         "node",
+						"scrapeUrl":          "http://user:password@secret.internal:9100/metrics?token=secret",
+						"globalUrl":          "https://prometheus.example/graph?g0.expr=secret",
+						"lastError":          "dial /private/path with password=secret",
+						"lastScrape":         "2026-07-16T11:59:30Z",
 						"lastScrapeDuration": 0.25,
 						"health":             "down",
 						"scrapeInterval":     "15s",

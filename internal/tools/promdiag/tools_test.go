@@ -12,12 +12,12 @@ import (
 )
 
 type fakeClient struct {
-	serverInfo      promapi.ServerInfo
-	targetList      promapi.TargetList
-	metricSnapshot  promapi.MetricSnapshot
-	err             error
-	targetLimit     int
-	metricRequest   promapi.MetricSnapshotRequest
+	serverInfo     promapi.ServerInfo
+	targetList     promapi.TargetList
+	metricSnapshot promapi.MetricSnapshot
+	err            error
+	targetLimit    int
+	metricRequest  promapi.MetricSnapshotRequest
 }
 
 func (c *fakeClient) ServerInfo(context.Context) (promapi.ServerInfo, error) {

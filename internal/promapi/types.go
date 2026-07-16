@@ -37,23 +37,23 @@ type RuntimeInfo struct {
 }
 
 type TargetList struct {
-	Count      int             `json:"count"`
-	Truncated  bool            `json:"truncated"`
-	Targets    []TargetSummary `json:"targets"`
-	WarningCount int           `json:"warning_count"`
-	InfoCount  int             `json:"info_count"`
+	Count        int             `json:"count"`
+	Truncated    bool            `json:"truncated"`
+	Targets      []TargetSummary `json:"targets"`
+	WarningCount int             `json:"warning_count"`
+	InfoCount    int             `json:"info_count"`
 }
 
 type TargetSummary struct {
-	ScrapePool          string  `json:"scrape_pool"`
-	Job                 string  `json:"job,omitempty"`
-	Instance            string  `json:"instance,omitempty"`
-	Health              string  `json:"health"`
-	LastScrape          string  `json:"last_scrape,omitempty"`
-	LastScrapeDuration  float64 `json:"last_scrape_duration_seconds"`
-	ScrapeInterval      string  `json:"scrape_interval,omitempty"`
-	ScrapeTimeout       string  `json:"scrape_timeout,omitempty"`
-	ErrorPresent        bool    `json:"error_present"`
+	ScrapePool         string  `json:"scrape_pool"`
+	Job                string  `json:"job,omitempty"`
+	Instance           string  `json:"instance,omitempty"`
+	Health             string  `json:"health"`
+	LastScrape         string  `json:"last_scrape,omitempty"`
+	LastScrapeDuration float64 `json:"last_scrape_duration_seconds"`
+	ScrapeInterval     string  `json:"scrape_interval,omitempty"`
+	ScrapeTimeout      string  `json:"scrape_timeout,omitempty"`
+	ErrorPresent       bool    `json:"error_present"`
 }
 
 type MetricSnapshotRequest struct {

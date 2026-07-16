@@ -13,7 +13,7 @@ type ClusterInfoTool struct {
 }
 
 type clusterInfoInput struct {
-	NodeLimit int `json:"node_limit,omitempty"`
+	NodeLimit *int `json:"node_limit,omitempty"`
 }
 
 func NewClusterInfo(client Client) *ClusterInfoTool {
@@ -29,22 +29,23 @@ func (t *ClusterInfoTool) Definition() agent.ToolDefinition {
 }
 
 func (t *ClusterInfoTool) Execute(ctx context.Context, arguments json.RawMessage) (json.RawMessage, error) {
-	input := clusterInfoInput{NodeLimit: defaultNodeLimit}
+	var input clusterInfoInput
 	if err := decodeStrict(arguments, &input); err != nil {
 		return nil, err
 	}
-	if input.NodeLimit == 0 {
-		input.NodeLimit = defaultNodeLimit
+	nodeLimit := defaultNodeLimit
+	if input.NodeLimit != nil {
+		nodeLimit = *input.NodeLimit
 	}
-	if input.NodeLimit < 1 || input.NodeLimit > maxNodeLimit {
+	if nodeLimit < 1 || nodeLimit > maxNodeLimit {
 		return nil, errors.New("node_limit must be between 1 and 200")
 	}
-	result, err := t.client.ClusterInfo(ctx, int64(input.NodeLimit))
+	result, err := t.client.ClusterInfo(ctx, int64(nodeLimit))
 	if err != nil {
 		return nil, err
 	}
-	if len(result.Nodes) > input.NodeLimit {
-		result.Nodes = result.Nodes[:input.NodeLimit]
+	if len(result.Nodes) > nodeLimit {
+		result.Nodes = result.Nodes[:nodeLimit]
 		result.NodeCount = len(result.Nodes)
 		result.Truncated = true
 	}

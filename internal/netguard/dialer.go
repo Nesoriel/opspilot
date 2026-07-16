@@ -13,10 +13,13 @@ type Resolver interface {
 	LookupIPAddr(ctx context.Context, host string) ([]net.IPAddr, error)
 }
 
+type DialFunc func(ctx context.Context, network, address string) (net.Conn, error)
+
 type Dialer struct {
 	Resolver     Resolver
 	AllowPrivate bool
 	Dialer       net.Dialer
+	Dial         DialFunc
 }
 
 func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
@@ -27,6 +30,10 @@ func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.
 	resolver := d.Resolver
 	if resolver == nil {
 		resolver = net.DefaultResolver
+	}
+	dial := d.Dial
+	if dial == nil {
+		dial = d.Dialer.DialContext
 	}
 
 	addresses, err := resolver.LookupIPAddr(ctx, host)
@@ -49,7 +56,7 @@ func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.
 			continue
 		}
 
-		connection, dialErr := d.Dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+		connection, dialErr := dial(ctx, network, net.JoinHostPort(ip.String(), port))
 		if dialErr == nil {
 			return connection, nil
 		}

@@ -2,7 +2,7 @@
 
 OpsPilot is a code-first, safety-oriented operations agent implemented in Go. Its core runtime stays provider-neutral while adapters integrate with the Volcengine AI ecosystem.
 
-> Status: early development. The project now includes a bounded Agent Runtime, an Ark Responses API adapter, and a small set of machine-readable, read-only diagnostic tools.
+> Status: early development. The project includes a bounded Agent Runtime, an Ark Responses API adapter, privacy-safe runtime events, optional OpenTelemetry tracing, and a small set of machine-readable, read-only diagnostic tools.
 
 ## Design goals
 
@@ -19,6 +19,8 @@ OpsPilot is a code-first, safety-oriented operations agent implemented in Go. It
 - Strongly defined tool registry with duplicate and schema validation.
 - Read-only `dns_lookup` and SSRF-aware `http_probe` tools.
 - Machine-readable CLI intended for agents and automation.
+- JSONL lifecycle events with run IDs, step numbers, durations, and sanitized error classes.
+- Optional OTLP/HTTP traces for Agent runs, model calls, and tool executions.
 - Configuration validation and provider-error secret redaction.
 
 ## Build and test
@@ -46,7 +48,29 @@ export ARK_API_KEY='your-api-key'
 go run ./cmd/opspilot agent run 'Resolve example.com and check whether its website is reachable.'
 ```
 
-The command emits structured JSON containing the final answer, full message history, and executed step count. The Ark model can select from the registered read-only tools.
+The command writes the final structured result to stdout. The Ark model can select from the registered read-only tools.
+
+### Stream lifecycle events
+
+```bash
+go run ./cmd/opspilot agent run --events=jsonl \
+  'Resolve example.com and check whether its website is reachable.' \
+  2>events.jsonl
+```
+
+JSONL events are written to stderr, so agents can consume the final result from stdout independently. Events intentionally omit prompts, tool arguments, tool results, credentials, and raw provider errors.
+
+### Export OpenTelemetry traces
+
+```bash
+export OPSPILOT_OTEL_ENABLED=true
+export OTEL_SERVICE_NAME=opspilot
+export OTEL_EXPORTER_OTLP_ENDPOINT='http://localhost:4318'
+
+go run ./cmd/opspilot agent run 'Inspect example.com.'
+```
+
+The OTLP/HTTP exporter follows standard OpenTelemetry environment variables. Telemetry initialization or shutdown failures do not fail the diagnostic run.
 
 ## Use the tool runtime directly
 
@@ -60,10 +84,9 @@ Private, loopback, and link-local HTTP targets are blocked by default. Set `OPSP
 
 ## Roadmap
 
-1. Streaming Agent events and OpenTelemetry traces.
-2. MCP client/server support and richer Agent skill packaging.
-3. Docker, Kubernetes, Prometheus, Loki, and TLS diagnostics.
-4. PostgreSQL task state and VikingDB retrieval.
-5. Approval gates, AgentKit/VKE deployment, and production evaluation.
+1. MCP client/server support and richer Agent skill packaging.
+2. Docker, Kubernetes, Prometheus, Loki, and TLS diagnostics.
+3. PostgreSQL task state and VikingDB retrieval.
+4. Approval gates, AgentKit/VKE deployment, and production evaluation.
 
 See [`docs/architecture.md`](docs/architecture.md) for the initial boundaries.

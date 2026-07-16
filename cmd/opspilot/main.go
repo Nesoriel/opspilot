@@ -57,9 +57,9 @@ func runAgent(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 		printAgentUsage(stderr)
 		return errors.New("agent run command is required")
 	}
-	prompt := strings.TrimSpace(strings.Join(args[1:], " "))
-	if prompt == "" {
-		return errors.New("agent prompt is required")
+	options, err := parseAgentRunOptions(args[1:], environmentLookup)
+	if err != nil {
+		return err
 	}
 
 	config, err := arkmodel.ConfigFromEnv()
@@ -74,7 +74,16 @@ func runAgent(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	if err != nil {
 		return err
 	}
-	runtime, err := agent.NewRuntime(model, registry)
+
+	runtimeObservability := setupRuntimeObservability(ctx, options.eventMode, stderr, environmentLookup)
+	defer runtimeObservability.shutdown()
+	emitObservabilityWarning(stderr, options.eventMode, runtimeObservability.warning)
+
+	runtimeOptions := make([]agent.Option, 0, 1)
+	if runtimeObservability.observer != nil {
+		runtimeOptions = append(runtimeOptions, agent.WithObserver(runtimeObservability.observer))
+	}
+	runtime, err := agent.NewRuntime(model, registry, runtimeOptions...)
 	if err != nil {
 		return err
 	}
@@ -85,7 +94,7 @@ func runAgent(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	}
 	result, err := runtime.Run(ctx, []agent.Message{
 		{Role: agent.RoleSystem, Content: systemPrompt},
-		{Role: agent.RoleUser, Content: prompt},
+		{Role: agent.RoleUser, Content: options.prompt},
 	})
 	if err != nil {
 		return err
@@ -178,5 +187,5 @@ func printToolUsage(writer io.Writer) {
 }
 
 func printAgentUsage(writer io.Writer) {
-	fmt.Fprintln(writer, "usage: opspilot agent run PROMPT")
+	fmt.Fprintln(writer, "usage: opspilot agent run [--events=jsonl] PROMPT")
 }

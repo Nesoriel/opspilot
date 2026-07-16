@@ -5,14 +5,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 )
 
-var ErrMaxStepsExceeded = errors.New("agent exceeded maximum steps")
+var (
+	ErrMaxStepsExceeded = errors.New("agent exceeded maximum steps")
+	runSequence         atomic.Uint64
+)
 
 type EventType string
 
 const (
+	EventRunStarted    EventType = "run.started"
 	EventModelStarted  EventType = "model.started"
 	EventModelFinished EventType = "model.finished"
 	EventToolStarted   EventType = "tool.started"
@@ -21,11 +26,14 @@ const (
 )
 
 type Event struct {
-	Type       EventType `json:"type"`
-	Step       int       `json:"step,omitempty"`
-	ToolName   string    `json:"tool_name,omitempty"`
-	ToolCallID string    `json:"tool_call_id,omitempty"`
-	Err        error     `json:"-"`
+	Type       EventType     `json:"type"`
+	RunID      string        `json:"run_id"`
+	Timestamp  time.Time     `json:"timestamp"`
+	Duration   time.Duration `json:"-"`
+	Step       int           `json:"step,omitempty"`
+	ToolName   string        `json:"tool_name,omitempty"`
+	ToolCallID string        `json:"tool_call_id,omitempty"`
+	Err        error         `json:"-"`
 }
 
 type Observer interface {
@@ -84,7 +92,21 @@ func NewRuntime(model Model, registry *Registry, options ...Option) (*Runtime, e
 	return runtime, nil
 }
 
-func (r *Runtime) Run(ctx context.Context, initial []Message) (RunResult, error) {
+func (r *Runtime) Run(ctx context.Context, initial []Message) (result RunResult, runErr error) {
+	runID := newRunID()
+	runStarted := time.Now()
+	r.observe(ctx, Event{Type: EventRunStarted, RunID: runID, Timestamp: runStarted.UTC()})
+	defer func() {
+		r.observe(ctx, Event{
+			Type:      EventRunFinished,
+			RunID:     runID,
+			Timestamp: time.Now().UTC(),
+			Duration:  time.Since(runStarted),
+			Step:      result.Steps,
+			Err:       runErr,
+		})
+	}()
+
 	messages := append([]Message(nil), initial...)
 	definitions := r.registry.Definitions()
 
@@ -93,9 +115,17 @@ func (r *Runtime) Run(ctx context.Context, initial []Message) (RunResult, error)
 			return RunResult{Messages: messages, Steps: step - 1}, err
 		}
 
-		r.observe(ctx, Event{Type: EventModelStarted, Step: step})
+		modelStarted := time.Now()
+		r.observe(ctx, Event{Type: EventModelStarted, RunID: runID, Timestamp: modelStarted.UTC(), Step: step})
 		response, err := r.model.Generate(ctx, append([]Message(nil), messages...), definitions)
-		r.observe(ctx, Event{Type: EventModelFinished, Step: step, Err: err})
+		r.observe(ctx, Event{
+			Type:      EventModelFinished,
+			RunID:     runID,
+			Timestamp: time.Now().UTC(),
+			Duration:  time.Since(modelStarted),
+			Step:      step,
+			Err:       err,
+		})
 		if err != nil {
 			return RunResult{Messages: messages, Steps: step}, fmt.Errorf("generate model response: %w", err)
 		}
@@ -106,7 +136,6 @@ func (r *Runtime) Run(ctx context.Context, initial []Message) (RunResult, error)
 			ToolCalls: response.ToolCalls,
 		})
 		if len(response.ToolCalls) == 0 {
-			r.observe(ctx, Event{Type: EventRunFinished, Step: step})
 			return RunResult{Final: response.Content, Messages: messages, Steps: step}, nil
 		}
 
@@ -114,7 +143,7 @@ func (r *Runtime) Run(ctx context.Context, initial []Message) (RunResult, error)
 			if call.ID == "" {
 				call.ID = fmt.Sprintf("step-%d-call-%d", step, index+1)
 			}
-			messages = append(messages, r.executeTool(ctx, step, call))
+			messages = append(messages, r.executeTool(ctx, runID, step, call))
 		}
 	}
 
@@ -132,8 +161,16 @@ type toolError struct {
 	Message string `json:"message"`
 }
 
-func (r *Runtime) executeTool(ctx context.Context, step int, call ToolCall) Message {
-	r.observe(ctx, Event{Type: EventToolStarted, Step: step, ToolName: call.Name, ToolCallID: call.ID})
+func (r *Runtime) executeTool(ctx context.Context, runID string, step int, call ToolCall) Message {
+	toolStarted := time.Now()
+	r.observe(ctx, Event{
+		Type:       EventToolStarted,
+		RunID:      runID,
+		Timestamp:  toolStarted.UTC(),
+		Step:       step,
+		ToolName:   call.Name,
+		ToolCallID: call.ID,
+	})
 
 	tool, found := r.registry.Get(call.Name)
 	if !found {
@@ -144,7 +181,7 @@ func (r *Runtime) executeTool(ctx context.Context, step int, call ToolCall) Mess
 				Message: fmt.Sprintf("tool %q is not registered", call.Name),
 			},
 		})
-		r.observe(ctx, Event{Type: EventToolFinished, Step: step, ToolName: call.Name, ToolCallID: call.ID, Err: ErrToolNotFound})
+		r.observeToolFinished(ctx, runID, toolStarted, step, call, ErrToolNotFound)
 		return Message{Role: RoleTool, ToolCallID: call.ID, ToolName: call.Name, Content: payload}
 	}
 
@@ -161,7 +198,7 @@ func (r *Runtime) executeTool(ctx context.Context, step int, call ToolCall) Mess
 			OK:    false,
 			Error: &toolError{Code: code, Message: err.Error()},
 		})
-		r.observe(ctx, Event{Type: EventToolFinished, Step: step, ToolName: call.Name, ToolCallID: call.ID, Err: err})
+		r.observeToolFinished(ctx, runID, toolStarted, step, call, err)
 		return Message{Role: RoleTool, ToolCallID: call.ID, ToolName: call.Name, Content: payload}
 	}
 
@@ -169,8 +206,21 @@ func (r *Runtime) executeTool(ctx context.Context, step int, call ToolCall) Mess
 		data = json.RawMessage(`null`)
 	}
 	payload := marshalEnvelope(toolEnvelope{OK: true, Data: data})
-	r.observe(ctx, Event{Type: EventToolFinished, Step: step, ToolName: call.Name, ToolCallID: call.ID})
+	r.observeToolFinished(ctx, runID, toolStarted, step, call, nil)
 	return Message{Role: RoleTool, ToolCallID: call.ID, ToolName: call.Name, Content: payload}
+}
+
+func (r *Runtime) observeToolFinished(ctx context.Context, runID string, started time.Time, step int, call ToolCall, err error) {
+	r.observe(ctx, Event{
+		Type:       EventToolFinished,
+		RunID:      runID,
+		Timestamp:  time.Now().UTC(),
+		Duration:   time.Since(started),
+		Step:       step,
+		ToolName:   call.Name,
+		ToolCallID: call.ID,
+		Err:        err,
+	})
 }
 
 func marshalEnvelope(envelope toolEnvelope) string {
@@ -182,7 +232,15 @@ func marshalEnvelope(envelope toolEnvelope) string {
 }
 
 func (r *Runtime) observe(ctx context.Context, event Event) {
-	if r.observer != nil {
-		r.observer.Observe(ctx, event)
+	if r.observer == nil {
+		return
 	}
+	defer func() {
+		_ = recover()
+	}()
+	r.observer.Observe(ctx, event)
+}
+
+func newRunID() string {
+	return fmt.Sprintf("run-%d-%d", time.Now().UnixNano(), runSequence.Add(1))
 }

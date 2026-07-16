@@ -1,11 +1,12 @@
 module github.com/Nesoriel/opspilot
 
-go 1.23.0
+go 1.26.5
 
 require (
 	github.com/cloudwego/eino v0.9.0-beta.1
 	github.com/cloudwego/eino-ext/components/model/agenticark v0.2.0-beta.1
 	github.com/eino-contrib/jsonschema v1.0.3
+	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/volcengine/volcengine-go-sdk v1.2.27
 	go.opentelemetry.io/otel v1.38.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.38.0

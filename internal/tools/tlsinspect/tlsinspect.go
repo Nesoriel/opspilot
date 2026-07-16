@@ -332,6 +332,8 @@ func summarizeCertificates(chain []*x509.Certificate, now time.Time) ([]certific
 
 func classifyDialError(err error) error {
 	switch {
+	case errors.Is(err, context.Canceled):
+		return &diagnosticError{code: "tls_canceled", err: err}
 	case errors.Is(err, context.DeadlineExceeded):
 		return &diagnosticError{code: "tls_timeout", err: err}
 	case strings.Contains(err.Error(), "resolve target"):
@@ -344,6 +346,9 @@ func classifyDialError(err error) error {
 }
 
 func classifyHandshakeError(err error) error {
+	if errors.Is(err, context.Canceled) {
+		return &diagnosticError{code: "tls_canceled", err: err}
+	}
 	if errors.Is(err, context.DeadlineExceeded) {
 		return &diagnosticError{code: "tls_timeout", err: err}
 	}

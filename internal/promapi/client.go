@@ -150,15 +150,31 @@ func (c *Client) endpoint(apiPath string, query url.Values) string {
 }
 
 func (c *Client) get(ctx context.Context, apiPath string, query url.Values, output any) (responseMeta, error) {
+	return c.requestJSON(ctx, http.MethodGet, apiPath, query, nil, output)
+}
+
+func (c *Client) postForm(ctx context.Context, apiPath string, form url.Values, output any) (responseMeta, error) {
+	return c.requestJSON(ctx, http.MethodPost, apiPath, nil, form, output)
+}
+
+func (c *Client) requestJSON(ctx context.Context, method, apiPath string, query, form url.Values, output any) (responseMeta, error) {
 	if err := c.ready(); err != nil {
 		return responseMeta{}, err
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.endpoint(apiPath, query), nil)
+
+	var body io.Reader
+	if form != nil {
+		body = strings.NewReader(form.Encode())
+	}
+	request, err := http.NewRequestWithContext(ctx, method, c.endpoint(apiPath, query), body)
 	if err != nil {
 		return responseMeta{}, errors.New("prometheus_request_invalid: request could not be created")
 	}
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("User-Agent", "opspilot/prometheus-readonly")
+	if form != nil {
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
 	if c.tokenFile != "" {
 		token, err := readBearerToken(c.tokenFile)
 		if err != nil {

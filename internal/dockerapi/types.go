@@ -40,7 +40,7 @@ type EngineInfo struct {
 	LiveRestoreEnabled bool     `json:"live_restore_enabled"`
 	ExperimentalBuild  bool     `json:"experimental_build"`
 	SecurityOptions    []string `json:"security_options,omitempty"`
-	Warnings           []string `json:"warnings,omitempty"`
+	WarningCount       int      `json:"warning_count"`
 }
 
 type ContainerListOptions struct {
@@ -98,18 +98,18 @@ type ContainerInspect struct {
 }
 
 type ContainerState struct {
-	Status     string         `json:"status"`
-	Running    bool           `json:"running"`
-	Paused     bool           `json:"paused"`
-	Restarting bool           `json:"restarting"`
-	OOMKilled  bool           `json:"oom_killed"`
-	Dead       bool           `json:"dead"`
-	PID        int            `json:"pid,omitempty"`
-	ExitCode   int            `json:"exit_code"`
-	Error      string         `json:"error,omitempty"`
-	StartedAt  string         `json:"started_at,omitempty"`
-	FinishedAt string         `json:"finished_at,omitempty"`
-	Health     *HealthSummary `json:"health,omitempty"`
+	Status       string         `json:"status"`
+	Running      bool           `json:"running"`
+	Paused       bool           `json:"paused"`
+	Restarting   bool           `json:"restarting"`
+	OOMKilled    bool           `json:"oom_killed"`
+	Dead         bool           `json:"dead"`
+	PID          int            `json:"pid,omitempty"`
+	ExitCode     int            `json:"exit_code"`
+	ErrorPresent bool           `json:"error_present"`
+	StartedAt    string         `json:"started_at,omitempty"`
+	FinishedAt   string         `json:"finished_at,omitempty"`
+	Health       *HealthSummary `json:"health,omitempty"`
 }
 
 type ContainerRuntime struct {
@@ -273,16 +273,6 @@ type rawPortBinding struct {
 func mapEngineInfo(version Version, raw rawInfo) EngineInfo {
 	securityOptions := append([]string(nil), raw.SecurityOptions...)
 	sort.Strings(securityOptions)
-	warnings := make([]string, 0, min(len(raw.Warnings), 20))
-	for _, warning := range raw.Warnings {
-		warning = strings.TrimSpace(warning)
-		if warning != "" {
-			warnings = append(warnings, truncate(warning, 512))
-		}
-		if len(warnings) == 20 {
-			break
-		}
-	}
 	return EngineInfo{
 		Version:            version,
 		Containers:         raw.Containers,
@@ -305,7 +295,7 @@ func mapEngineInfo(version Version, raw rawInfo) EngineInfo {
 		LiveRestoreEnabled: raw.LiveRestoreEnabled,
 		ExperimentalBuild:  raw.ExperimentalBuild,
 		SecurityOptions:    securityOptions,
-		Warnings:           warnings,
+		WarningCount:       len(raw.Warnings),
 	}
 }
 
@@ -371,18 +361,18 @@ func mapContainerInspect(raw rawContainerInspect) ContainerInspect {
 	}
 	if raw.State != nil {
 		result.State = ContainerState{
-			Status:     raw.State.Status,
-			Running:    raw.State.Running,
-			Paused:     raw.State.Paused,
-			Restarting: raw.State.Restarting,
-			OOMKilled:  raw.State.OOMKilled,
-			Dead:       raw.State.Dead,
-			PID:        raw.State.Pid,
-			ExitCode:   raw.State.ExitCode,
-			Error:      truncate(strings.TrimSpace(raw.State.Error), 512),
-			StartedAt:  raw.State.StartedAt,
-			FinishedAt: raw.State.FinishedAt,
-			Health:     mapHealth(raw.State.Health),
+			Status:       raw.State.Status,
+			Running:      raw.State.Running,
+			Paused:       raw.State.Paused,
+			Restarting:   raw.State.Restarting,
+			OOMKilled:    raw.State.OOMKilled,
+			Dead:         raw.State.Dead,
+			PID:          raw.State.Pid,
+			ExitCode:     raw.State.ExitCode,
+			ErrorPresent: strings.TrimSpace(raw.State.Error) != "",
+			StartedAt:    raw.State.StartedAt,
+			FinishedAt:   raw.State.FinishedAt,
+			Health:       mapHealth(raw.State.Health),
 		}
 	}
 	if raw.HostConfig != nil {

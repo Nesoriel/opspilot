@@ -51,6 +51,9 @@ func TestClientMapsRedactedServerTargetsAndMetricSnapshot(t *testing.T) {
 				"hostname":            "secret-monitoring-host",
 			}, nil, nil)
 		case "/prom/api/v1/targets":
+			if request.Method != http.MethodGet {
+				t.Errorf("unexpected targets method: %s", request.Method)
+			}
 			if request.URL.Query().Get("state") != "active" {
 				t.Errorf("unexpected target state: %s", request.URL.RawQuery)
 			}
@@ -83,12 +86,24 @@ func TestClientMapsRedactedServerTargetsAndMetricSnapshot(t *testing.T) {
 				"droppedTargets": []map[string]any{{"discoveredLabels": map[string]string{"secret": "dropped-secret"}}},
 			}, []string{"target warning secret"}, nil)
 		case "/prom/api/v1/query":
-			query := request.URL.Query()
-			if query.Get("query") != `sum by (instance,job) (up{instance="node-a:9100",job="node"})` {
-				t.Errorf("unexpected generated query: %q", query.Get("query"))
+			if request.Method != http.MethodPost {
+				t.Errorf("unexpected query method: %s", request.Method)
 			}
-			if query.Get("limit") != "1" || query.Get("timeout") != "2s" {
-				t.Errorf("unexpected query bounds: %s", request.URL.RawQuery)
+			if request.URL.RawQuery != "" {
+				t.Errorf("query parameters leaked into URL: %s", request.URL.RawQuery)
+			}
+			if request.Header.Get("Content-Type") != "application/x-www-form-urlencoded" {
+				t.Errorf("unexpected content type: %q", request.Header.Get("Content-Type"))
+			}
+			if err := request.ParseForm(); err != nil {
+				t.Errorf("parse query form: %v", err)
+			}
+			form := request.PostForm
+			if form.Get("query") != `sum by (instance,job) (up{instance="node-a:9100",job="node"})` {
+				t.Errorf("unexpected generated query: %q", form.Get("query"))
+			}
+			if form.Get("limit") != "1" || form.Get("timeout") != "2s" {
+				t.Errorf("unexpected query bounds: %s", form.Encode())
 			}
 			writeEnvelope(t, writer, map[string]any{
 				"resultType": "vector",

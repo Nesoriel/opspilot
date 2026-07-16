@@ -2,7 +2,7 @@
 
 OpsPilot is a code-first, safety-oriented operations agent implemented in Go. Its core runtime stays provider-neutral while adapters integrate with the Volcengine AI ecosystem.
 
-> Status: early development. The project includes a bounded Agent Runtime, an Ark Responses API adapter, an MCP stdio server, privacy-safe runtime events, optional OpenTelemetry tracing, and machine-readable, read-only network diagnostics.
+> Status: early development. The project includes a bounded Agent Runtime, an Ark Responses API adapter, an MCP stdio server, privacy-safe runtime events, optional OpenTelemetry tracing, and machine-readable, read-only network and container diagnostics.
 
 ## Design goals
 
@@ -19,6 +19,7 @@ OpsPilot is a code-first, safety-oriented operations agent implemented in Go. It
 - Official MCP Go SDK stdio server backed by the same tool registry as the CLI and Agent Runtime.
 - Strongly defined tool registry with duplicate and schema validation.
 - Read-only `dns_lookup`, SSRF-aware `http_probe`, and certificate-aware `tls_inspect` tools.
+- Read-only Docker Engine, container-list, and redacted container-inspect diagnostics over a local Unix socket.
 - Shared network guard that resolves and validates every dial target before connecting.
 - Machine-readable CLI intended for agents and automation.
 - JSONL lifecycle events with run IDs, step numbers, durations, and sanitized error classes.
@@ -50,7 +51,8 @@ export ARK_API_KEY='your-api-key'
 ## Run the agent
 
 ```bash
-go run ./cmd/opspilot agent run 'Resolve example.com, inspect its TLS certificate, and check whether the website is reachable.'
+go run ./cmd/opspilot agent run \
+  'Check the local Docker Engine and identify unhealthy or stopped containers.'
 ```
 
 The command writes the final structured result to stdout. The Ark model can select from the registered read-only tools.
@@ -96,7 +98,8 @@ A typical MCP client configuration is:
       "args": ["mcp", "stdio"],
       "env": {
         "OPSPILOT_HTTP_ALLOW_PRIVATE": "false",
-        "OPSPILOT_TLS_ALLOW_PRIVATE": "false"
+        "OPSPILOT_TLS_ALLOW_PRIVATE": "false",
+        "OPSPILOT_DOCKER_SOCKET": "/var/run/docker.sock"
       }
     }
   }
@@ -109,19 +112,51 @@ The server publishes each Registry tool with its existing JSON Schema and explic
 
 ```bash
 go run ./cmd/opspilot tool list
-go run ./cmd/opspilot tool run dns_lookup '{"host":"example.com"}'
-go run ./cmd/opspilot tool run http_probe '{"url":"https://example.com"}'
-go run ./cmd/opspilot tool run tls_inspect '{"host":"example.com","port":443}'
+
+go run ./cmd/opspilot tool run dns_lookup \
+  '{"host":"example.com"}'
+
+go run ./cmd/opspilot tool run http_probe \
+  '{"url":"https://example.com"}'
+
+go run ./cmd/opspilot tool run tls_inspect \
+  '{"host":"example.com","port":443}'
+
+go run ./cmd/opspilot tool run docker_engine_info '{}'
+
+go run ./cmd/opspilot tool run docker_container_list \
+  '{"all":true,"limit":100}'
+
+go run ./cmd/opspilot tool run docker_container_inspect \
+  '{"container":"web"}'
 ```
 
-`tls_inspect` reports the negotiated TLS version, cipher suite, ALPN, certificate chain, validity dates, remaining days, hostname verification, and trust result. A certificate that is expired, not yet valid, untrusted, or mismatched is returned as structured evidence instead of being hidden behind a generic handshake error.
+### Docker diagnostic boundary
+
+`OPSPILOT_DOCKER_SOCKET` defaults to `/var/run/docker.sock`. It accepts an absolute filesystem path or a `unix:///absolute/path` URI. Remote `tcp://`, `http://`, `https://`, `ssh://`, and relative targets are rejected.
+
+The Docker client negotiates the daemon API through `/version`, then performs bounded GET requests. It does not invoke the Docker CLI and does not expose mutating operations.
+
+`docker_container_inspect` returns a deliberate diagnostic projection rather than raw `docker inspect` output. It omits:
+
+- environment values;
+- commands and arguments;
+- raw labels;
+- health-check output;
+- Docker log paths;
+- bind-mount and volume source paths;
+- free-text OCI/runtime errors.
+
+Engine warning text is also omitted; only `warning_count` is returned. Container runtime errors are represented by `error_present` without returning the raw text.
+
+Access to a Docker Unix socket is still a privileged host capability. OpsPilot's read-only implementation does not turn the socket itself into a read-only security boundary. Only grant the process access to a trusted local socket, and do not mount that socket into untrusted containers.
 
 Private, loopback, link-local, multicast, and unspecified HTTP/TLS targets are blocked by default. Set `OPSPILOT_HTTP_ALLOW_PRIVATE=true` or `OPSPILOT_TLS_ALLOW_PRIVATE=true` only in a trusted environment where internal service diagnostics are intended.
 
 ## Roadmap
 
 1. MCP client support and richer Agent skill packaging.
-2. Docker, Kubernetes, Prometheus, and Loki diagnostics.
+2. Kubernetes, Prometheus, and Loki diagnostics.
 3. PostgreSQL task state and VikingDB retrieval.
 4. Approval gates, AgentKit/VKE deployment, and production evaluation.
 

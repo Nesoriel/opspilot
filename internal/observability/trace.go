@@ -3,6 +3,7 @@ package observability
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/Nesoriel/opspilot/internal/agent"
 	"go.opentelemetry.io/otel/attribute"
@@ -11,11 +12,11 @@ import (
 )
 
 type TraceObserver struct {
-	mu         sync.Mutex
-	tracer     trace.Tracer
-	runs       map[string]spanState
-	models     map[modelSpanKey]trace.Span
-	tools      map[toolSpanKey]trace.Span
+	mu     sync.Mutex
+	tracer trace.Tracer
+	runs   map[string]spanState
+	models map[modelSpanKey]trace.Span
+	tools  map[toolSpanKey]trace.Span
 }
 
 type spanState struct {
@@ -29,8 +30,8 @@ type modelSpanKey struct {
 }
 
 type toolSpanKey struct {
-	runID string
-	step  int
+	runID  string
+	step   int
 	callID string
 }
 
@@ -99,11 +100,11 @@ func (o *TraceObserver) Observe(ctx context.Context, event agent.Event) {
 			delete(o.tools, key)
 		}
 	case agent.EventRunFinished:
+		o.cleanupRun(event.RunID, event.Timestamp)
 		if state, exists := o.runs[event.RunID]; exists {
 			finishSpan(state.span, event)
 			delete(o.runs, event.RunID)
 		}
-		o.cleanupRun(event.RunID, event.Timestamp)
 	}
 }
 

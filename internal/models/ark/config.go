@@ -37,15 +37,15 @@ func ConfigFromEnv() (Config, error) {
 
 func configFromLookup(lookup func(string) string) (Config, error) {
 	config := Config{
-		APIKey:    strings.TrimSpace(lookup("ARK_API_KEY")),
-		AccessKey: strings.TrimSpace(lookup("ARK_ACCESS_KEY")),
-		SecretKey: strings.TrimSpace(lookup("ARK_SECRET_KEY")),
-		Model:     strings.TrimSpace(lookup("ARK_MODEL_ID")),
-		BaseURL:   strings.TrimSpace(lookup("ARK_BASE_URL")),
-		Region:    strings.TrimSpace(lookup("ARK_REGION")),
-		Timeout:   60 * time.Second,
+		APIKey:     strings.TrimSpace(lookup("ARK_API_KEY")),
+		AccessKey:  strings.TrimSpace(lookup("ARK_ACCESS_KEY")),
+		SecretKey:  strings.TrimSpace(lookup("ARK_SECRET_KEY")),
+		Model:      strings.TrimSpace(lookup("ARK_MODEL_ID")),
+		BaseURL:    strings.TrimSpace(lookup("ARK_BASE_URL")),
+		Region:     strings.TrimSpace(lookup("ARK_REGION")),
+		Timeout:    60 * time.Second,
 		RetryTimes: 2,
-		Thinking:  ThinkingAuto,
+		Thinking:   ThinkingAuto,
 	}
 
 	if raw := strings.TrimSpace(lookup("ARK_TIMEOUT")); raw != "" {

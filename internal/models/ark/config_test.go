@@ -45,7 +45,7 @@ func TestConfigRequiresModel(t *testing.T) {
 
 func TestConfigRejectsPartialAKSK(t *testing.T) {
 	values := map[string]string{
-		"ARK_MODEL_ID":  "ep-test",
+		"ARK_MODEL_ID":   "ep-test",
 		"ARK_ACCESS_KEY": "access",
 	}
 	_, err := configFromLookup(func(key string) string { return values[key] })
@@ -56,10 +56,10 @@ func TestConfigRejectsPartialAKSK(t *testing.T) {
 
 func TestConfigRejectsInvalidThinkingMode(t *testing.T) {
 	config := Config{
-		APIKey:    "test-key",
-		Model:     "ep-test",
-		Timeout:   time.Second,
-		Thinking:  "sometimes",
+		APIKey:   "test-key",
+		Model:    "ep-test",
+		Timeout:  time.Second,
+		Thinking: "sometimes",
 	}
 	if err := config.Validate(); err == nil {
 		t.Fatal("expected invalid thinking mode error")

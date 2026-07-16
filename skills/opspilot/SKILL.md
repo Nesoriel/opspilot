@@ -13,7 +13,15 @@ Use OpsPilot when evidence is required from DNS or HTTP endpoints. Treat its JSO
 opspilot agent run 'Resolve example.com and check whether its website is reachable.'
 ```
 
-This requires `ARK_MODEL_ID` and Ark credentials in the process environment. The command emits JSON containing the final answer, message history, and step count.
+This requires `ARK_MODEL_ID` and Ark credentials in the process environment. The command writes JSON containing the final answer, message history, and step count to stdout.
+
+For live progress without mixing events into the final result:
+
+```bash
+opspilot agent run --events=jsonl 'Inspect example.com.' 2>events.jsonl
+```
+
+Consume stderr as a JSONL event stream and stdout as the final result. Events contain lifecycle metadata only; they do not contain prompts, tool arguments, tool results, or credentials.
 
 ## Discover tools
 

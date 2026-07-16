@@ -3,12 +3,10 @@ package kubeapi
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net"
 	"strings"
 	"sync"
 
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -88,6 +86,9 @@ func (c *Client) DefaultNamespace() string {
 }
 
 func (c *Client) ClusterInfo(ctx context.Context, nodeLimit int64) (ClusterInfo, error) {
+	if nodeLimit < 1 {
+		return ClusterInfo{}, errors.New("kubernetes_request_invalid: node limit must be positive")
+	}
 	if err := ctx.Err(); err != nil {
 		return ClusterInfo{}, classifyAPIError(err)
 	}
@@ -106,16 +107,24 @@ func (c *Client) ClusterInfo(ctx context.Context, nodeLimit int64) (ClusterInfo,
 	if err != nil {
 		return ClusterInfo{}, classifyAPIError(err)
 	}
-	mapped := mapNodes(nodes.Items)
+	truncated := nodes.Continue != "" || int64(len(nodes.Items)) > nodeLimit
+	items := nodes.Items
+	if int64(len(items)) > nodeLimit {
+		items = items[:nodeLimit]
+	}
+	mapped := mapNodes(items)
 	return ClusterInfo{
 		Version:   mapServerVersion(serverVersion),
 		NodeCount: len(mapped),
-		Truncated: nodes.Continue != "",
+		Truncated: truncated,
 		Nodes:     mapped,
 	}, nil
 }
 
 func (c *Client) PodList(ctx context.Context, namespace string, limit int64) (PodList, error) {
+	if limit < 1 {
+		return PodList{}, errors.New("kubernetes_request_invalid: Pod limit must be positive")
+	}
 	client, err := c.backend()
 	if err != nil {
 		return PodList{}, err
@@ -128,16 +137,24 @@ func (c *Client) PodList(ctx context.Context, namespace string, limit int64) (Po
 	if err != nil {
 		return PodList{}, classifyAPIError(err)
 	}
-	mapped := mapPods(pods.Items)
+	truncated := pods.Continue != "" || int64(len(pods.Items)) > limit
+	items := pods.Items
+	if int64(len(items)) > limit {
+		items = items[:limit]
+	}
+	mapped := mapPods(items)
 	return PodList{
 		Namespace: namespace,
 		Count:     len(mapped),
-		Truncated: pods.Continue != "",
+		Truncated: truncated,
 		Pods:      mapped,
 	}, nil
 }
 
 func (c *Client) PodInspect(ctx context.Context, namespace, name string, eventLimit int64) (PodInspect, error) {
+	if eventLimit < 1 {
+		return PodInspect{}, errors.New("kubernetes_request_invalid: event limit must be positive")
+	}
 	client, err := c.backend()
 	if err != nil {
 		return PodInspect{}, err
@@ -154,7 +171,12 @@ func (c *Client) PodInspect(ctx context.Context, namespace, name string, eventLi
 	if err != nil {
 		return PodInspect{}, classifyAPIError(err)
 	}
-	return mapPodInspect(pod, events.Items, events.Continue != ""), nil
+	truncated := events.Continue != "" || int64(len(events.Items)) > eventLimit
+	items := events.Items
+	if int64(len(items)) > eventLimit {
+		items = items[:eventLimit]
+	}
+	return mapPodInspect(pod, items, truncated), nil
 }
 
 func classifyAPIError(err error) error {
@@ -179,9 +201,5 @@ func classifyAPIError(err error) error {
 	if errors.As(err, &networkError) && networkError.Timeout() {
 		return errors.New("kubernetes_timeout: Kubernetes API request timed out")
 	}
-	return fmt.Errorf("kubernetes_api_error: Kubernetes API request failed")
-}
-
-func eventReasonKey(event corev1.Event) string {
-	return strings.TrimSpace(event.Type) + "/" + strings.TrimSpace(event.Reason)
+	return errors.New("kubernetes_api_error: Kubernetes API request failed")
 }

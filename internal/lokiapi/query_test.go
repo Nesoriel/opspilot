@@ -74,9 +74,9 @@ func TestMapStreamsFiltersSortsAndTruncates(t *testing.T) {
 
 func TestClassifyAPIEnvelopeDoesNotExposeDetails(t *testing.T) {
 	for errorType, code := range map[string]string{
-		"timeout": "loki_timeout",
-		"bad_data": "loki_query_invalid",
-		"execution": "loki_query_failed",
+		"timeout":           "loki_timeout",
+		"bad_data":          "loki_query_invalid",
+		"execution":         "loki_query_failed",
 		"unexpected/detail": "loki_api_error",
 	} {
 		err := classifyAPIEnvelope(errorType)

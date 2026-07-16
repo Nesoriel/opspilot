@@ -26,10 +26,10 @@ type StreamSummaryRequest struct {
 }
 
 type StreamSummary struct {
-	From      string          `json:"from"`
-	Through   string          `json:"through"`
-	Count     int             `json:"count"`
-	Truncated bool            `json:"truncated"`
+	From      string              `json:"from"`
+	Through   string              `json:"through"`
+	Count     int                 `json:"count"`
+	Truncated bool                `json:"truncated"`
 	Streams   []StreamSummaryItem `json:"streams"`
 }
 

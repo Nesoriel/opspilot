@@ -17,10 +17,12 @@ import (
 	"github.com/Nesoriel/opspilot/internal/dockerapi"
 	"github.com/Nesoriel/opspilot/internal/kubeapi"
 	arkmodel "github.com/Nesoriel/opspilot/internal/models/ark"
+	"github.com/Nesoriel/opspilot/internal/promapi"
 	"github.com/Nesoriel/opspilot/internal/tools/dnslookup"
 	"github.com/Nesoriel/opspilot/internal/tools/dockerdiag"
 	"github.com/Nesoriel/opspilot/internal/tools/httpprobe"
 	"github.com/Nesoriel/opspilot/internal/tools/kubediag"
+	"github.com/Nesoriel/opspilot/internal/tools/promdiag"
 	"github.com/Nesoriel/opspilot/internal/tools/tlsinspect"
 )
 
@@ -166,6 +168,7 @@ func runTool(ctx context.Context, args []string, stdout, stderr io.Writer) error
 func buildRegistry() (*agent.Registry, error) {
 	allowHTTPPrivate, _ := strconv.ParseBool(os.Getenv("OPSPILOT_HTTP_ALLOW_PRIVATE"))
 	allowTLSPrivate, _ := strconv.ParseBool(os.Getenv("OPSPILOT_TLS_ALLOW_PRIVATE"))
+	allowPrometheusHTTP, _ := strconv.ParseBool(os.Getenv("OPSPILOT_PROMETHEUS_ALLOW_HTTP"))
 	dockerClient, err := dockerapi.New(dockerapi.Config{
 		SocketPath: os.Getenv("OPSPILOT_DOCKER_SOCKET"),
 		Timeout:    5 * time.Second,
@@ -179,6 +182,14 @@ func buildRegistry() (*agent.Registry, error) {
 		Timeout:        10 * time.Second,
 		QPS:            5,
 		Burst:          10,
+	})
+	prometheusClient := promapi.New(promapi.Config{
+		BaseURL:          os.Getenv("OPSPILOT_PROMETHEUS_URL"),
+		AllowHTTP:        allowPrometheusHTTP,
+		BearerTokenFile:  os.Getenv("OPSPILOT_PROMETHEUS_BEARER_TOKEN_FILE"),
+		Timeout:          8 * time.Second,
+		QueryTimeout:     5 * time.Second,
+		MaxResponseBytes: 4 << 20,
 	})
 
 	registry := agent.NewRegistry()
@@ -194,6 +205,9 @@ func buildRegistry() (*agent.Registry, error) {
 		kubediag.NewClusterInfo(kubernetesClient),
 		kubediag.NewPodList(kubernetesClient),
 		kubediag.NewPodInspect(kubernetesClient),
+		promdiag.NewServerInfo(prometheusClient),
+		promdiag.NewTargetList(prometheusClient),
+		promdiag.NewMetricSnapshot(prometheusClient),
 		tlsinspect.New(tlsinspect.Config{
 			AllowPrivateNetworks: allowTLSPrivate,
 			Timeout:              10 * time.Second,

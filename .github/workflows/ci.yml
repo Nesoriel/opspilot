@@ -17,6 +17,15 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: Resolve modules
+        run: go mod tidy
+      - name: Upload module lock files
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-mod-files
+          path: |
+            go.mod
+            go.sum
       - name: Check formatting
         run: test -z "$(gofmt -l .)"
       - name: Vet

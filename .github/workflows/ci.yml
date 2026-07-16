@@ -36,6 +36,17 @@ jobs:
       - name: Vet
         run: go vet ./...
       - name: Test
-        run: go test -race -coverprofile=coverage.out ./...
+        id: tests
+        continue-on-error: true
+        run: go test -race -coverprofile=coverage.out ./... >test.log 2>&1
+      - name: Upload test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kubernetes-test-log
+          path: test.log
+      - name: Fail on test error
+        if: steps.tests.outcome == 'failure'
+        run: exit 1
       - name: Build
         run: go build ./cmd/opspilot

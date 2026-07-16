@@ -16,12 +16,14 @@ import (
 	"github.com/Nesoriel/opspilot/internal/agent"
 	"github.com/Nesoriel/opspilot/internal/dockerapi"
 	"github.com/Nesoriel/opspilot/internal/kubeapi"
+	"github.com/Nesoriel/opspilot/internal/lokiapi"
 	arkmodel "github.com/Nesoriel/opspilot/internal/models/ark"
 	"github.com/Nesoriel/opspilot/internal/promapi"
 	"github.com/Nesoriel/opspilot/internal/tools/dnslookup"
 	"github.com/Nesoriel/opspilot/internal/tools/dockerdiag"
 	"github.com/Nesoriel/opspilot/internal/tools/httpprobe"
 	"github.com/Nesoriel/opspilot/internal/tools/kubediag"
+	"github.com/Nesoriel/opspilot/internal/tools/lokidiag"
 	"github.com/Nesoriel/opspilot/internal/tools/promdiag"
 	"github.com/Nesoriel/opspilot/internal/tools/tlsinspect"
 )
@@ -169,6 +171,7 @@ func buildRegistry() (*agent.Registry, error) {
 	allowHTTPPrivate, _ := strconv.ParseBool(os.Getenv("OPSPILOT_HTTP_ALLOW_PRIVATE"))
 	allowTLSPrivate, _ := strconv.ParseBool(os.Getenv("OPSPILOT_TLS_ALLOW_PRIVATE"))
 	allowPrometheusHTTP, _ := strconv.ParseBool(os.Getenv("OPSPILOT_PROMETHEUS_ALLOW_HTTP"))
+	allowLokiHTTP, _ := strconv.ParseBool(os.Getenv("OPSPILOT_LOKI_ALLOW_HTTP"))
 	dockerClient, err := dockerapi.New(dockerapi.Config{
 		SocketPath: os.Getenv("OPSPILOT_DOCKER_SOCKET"),
 		Timeout:    5 * time.Second,
@@ -191,6 +194,14 @@ func buildRegistry() (*agent.Registry, error) {
 		QueryTimeout:     5 * time.Second,
 		MaxResponseBytes: 4 << 20,
 	})
+	lokiClient := lokiapi.New(lokiapi.Config{
+		BaseURL:          os.Getenv("OPSPILOT_LOKI_URL"),
+		AllowHTTP:        allowLokiHTTP,
+		BearerTokenFile:  os.Getenv("OPSPILOT_LOKI_BEARER_TOKEN_FILE"),
+		TenantID:         os.Getenv("OPSPILOT_LOKI_TENANT_ID"),
+		Timeout:          8 * time.Second,
+		MaxResponseBytes: 4 << 20,
+	})
 
 	registry := agent.NewRegistry()
 	for _, tool := range []agent.Tool{
@@ -205,6 +216,8 @@ func buildRegistry() (*agent.Registry, error) {
 		kubediag.NewClusterInfo(kubernetesClient),
 		kubediag.NewPodList(kubernetesClient),
 		kubediag.NewPodInspect(kubernetesClient),
+		lokidiag.NewServerInfo(lokiClient),
+		lokidiag.NewStreamSummary(lokiClient),
 		promdiag.NewServerInfo(prometheusClient),
 		promdiag.NewTargetList(prometheusClient),
 		promdiag.NewMetricSnapshot(prometheusClient),

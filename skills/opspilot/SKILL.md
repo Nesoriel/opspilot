@@ -5,7 +5,7 @@ description: Run safe, read-only infrastructure diagnostics or delegate a bounde
 
 # OpsPilot skill
 
-Use OpsPilot when evidence is required from DNS, HTTP, TLS, a trusted local Docker Engine, a Kubernetes cluster configured with least-privilege credentials, or a trusted Prometheus endpoint. Treat its JSON output as evidence and preserve uncertainty.
+Use OpsPilot when evidence is required from DNS, HTTP, TLS, a trusted local Docker Engine, a Kubernetes cluster configured with least-privilege credentials, or trusted Prometheus and Loki endpoints. Treat its JSON output as evidence and preserve uncertainty.
 
 ## Preferred integration: MCP
 
@@ -22,14 +22,17 @@ Configure the OpsPilot binary as a stdio MCP server:
         "OPSPILOT_KUBECONFIG": "/absolute/path/to/kubeconfig",
         "OPSPILOT_KUBERNETES_CONTEXT": "production-readonly",
         "OPSPILOT_PROMETHEUS_URL": "https://prometheus.example.com",
-        "OPSPILOT_PROMETHEUS_BEARER_TOKEN_FILE": "/absolute/path/to/prometheus-token"
+        "OPSPILOT_PROMETHEUS_BEARER_TOKEN_FILE": "/absolute/path/to/prometheus-token",
+        "OPSPILOT_LOKI_URL": "https://loki.example.com",
+        "OPSPILOT_LOKI_BEARER_TOKEN_FILE": "/absolute/path/to/loki-token",
+        "OPSPILOT_LOKI_TENANT_ID": "operations"
       }
     }
   }
 }
 ```
 
-Discover and invoke the published tools through the MCP client. The tools are read-only and idempotent, but network, Docker, Kubernetes, and Prometheus tools still interact with privileged external systems. Do not enable private-network, Docker socket, Kubernetes credential, or Prometheus credential access unless the runtime is trusted.
+Discover and invoke the published tools through the MCP client. The tools are read-only and idempotent, but network, Docker, Kubernetes, Prometheus, and Loki tools still interact with privileged external systems. Do not grant these capabilities unless the runtime is trusted.
 
 Use `tls_inspect` when certificate expiry, trust, hostname coverage, TLS versions, cipher suites, or handshake failures may explain an incident. A successful handshake does not imply certificate verification succeeded: always inspect `verified` and `verification_error`.
 
@@ -59,12 +62,21 @@ For Prometheus incidents:
 4. Prefer exact matchers such as `job`, `namespace`, `pod`, `container`, `node`, or `instance` to narrow the result.
 5. Use a safe aggregation only when the raw series view is not required. State when `truncated` is true.
 
-`prometheus_metric_snapshot` does not accept arbitrary PromQL. Do not attempt to pass functions, range vectors, regular expressions, subqueries, offsets, or arbitrary label names. Scrape URLs, discovered labels, arbitrary labels, raw target errors, warning/info text, runtime hostname, working directory, and credentials are intentionally absent.
+`prometheus_metric_snapshot` does not accept arbitrary PromQL. Functions, range vectors, regular expressions, subqueries, offsets, arbitrary label names, scrape URLs, discovered labels, raw target errors, warning/info text, runtime hostname, working directory, and credentials are intentionally unavailable.
+
+For Loki incidents:
+
+1. Call `loki_server_info` to verify readiness and build version.
+2. Call `loki_stream_summary` with at least one exact diagnostic matcher such as `namespace`, `service_name`, `app`, `pod`, or `container`.
+3. Keep lookback narrow and increase it only when the expected stream is absent.
+4. Treat returned items as stream existence evidence, not log evidence. State when `truncated` is true.
+
+`loki_stream_summary` does not return log lines and does not accept arbitrary LogQL, regular expressions, empty selectors, query/query-range, tail, label enumeration, arbitrary paths, or write operations. Unknown stream labels, filenames, arbitrary metadata, readiness bodies, and credentials are intentionally unavailable.
 
 ## Delegate a diagnostic task
 
 ```bash
-opspilot agent run 'Check Kubernetes node readiness, unhealthy Pods, and Prometheus scrape targets.'
+opspilot agent run 'Check Kubernetes Pods, Prometheus targets, and Loki stream availability.'
 ```
 
 This requires `ARK_MODEL_ID` and Ark credentials in the process environment. The command writes JSON containing the final answer, message history, and step count to stdout.
@@ -98,8 +110,10 @@ opspilot tool run kubernetes_pod_inspect '{"namespace":"operations","pod":"web-0
 opspilot tool run prometheus_server_info '{}'
 opspilot tool run prometheus_target_list '{"limit":100}'
 opspilot tool run prometheus_metric_snapshot '{"metric":"up","matchers":{"job":"node"},"aggregation":"sum","group_by":["instance"],"limit":100}'
+opspilot tool run loki_server_info '{}'
+opspilot tool run loki_stream_summary '{"matchers":{"namespace":"operations","service_name":"api"},"lookback_minutes":60,"limit":100}'
 ```
 
-Check `ok` before reading `data`. Do not set `OPSPILOT_HTTP_ALLOW_PRIVATE=true`, `OPSPILOT_TLS_ALLOW_PRIVATE=true`, or `OPSPILOT_PROMETHEUS_ALLOW_HTTP=true` outside a trusted internal environment. Access to a Docker socket is itself privileged even though OpsPilot sends only read-only requests. Kubernetes credentials must use least-privilege RBAC and must not grant Secrets, Pod logs, exec, attach, port-forward, or mutating verbs. Prometheus credentials must be read-only and scoped to the configured endpoint.
+Check `ok` before reading `data`. Do not enable private-network HTTP/TLS, Prometheus HTTP, or Loki HTTP outside a trusted environment. Docker sockets, Kubernetes credentials, Prometheus credentials, Loki credentials, and Loki tenant identities must be least-privilege and scoped to the configured endpoint.
 
-Do not fabricate tool results. When a command fails, preserve the returned error class and continue with other read-only evidence when possible. Never expose Ark credentials, kubeconfig contents, ServiceAccount tokens, Prometheus bearer tokens, or raw infrastructure credentials in prompts, logs, or tool arguments. In MCP mode, treat stdout as protocol-only and send diagnostics to stderr.
+Do not fabricate tool results. Preserve returned error classes and continue with other read-only evidence when possible. Never expose Ark credentials, kubeconfig contents, ServiceAccount tokens, Prometheus or Loki bearer tokens, tenant credentials, or raw infrastructure credentials in prompts, logs, or tool arguments. In MCP mode, treat stdout as protocol-only and send diagnostics to stderr.

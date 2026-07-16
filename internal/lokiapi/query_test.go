@@ -53,10 +53,12 @@ func TestBuildStreamSelectorRejectsUnsafeInputs(t *testing.T) {
 	}
 }
 
-func TestMapStreamsFiltersSortsAndTruncates(t *testing.T) {
+func TestMapStreamsFiltersDeduplicatesSortsAndTruncates(t *testing.T) {
 	streams, truncated := mapStreams([]map[string]string{
 		{"namespace": "operations", "pod": "b", "filename": "/private/b", "custom": "hidden-b"},
 		{"namespace": "operations", "pod": "a", "container": "web", "internal": "hidden-a"},
+		{"namespace": "operations", "pod": "a", "container": "web", "filename": "/different/private/path"},
+		{"filename": "/only-hidden"},
 	}, diagnosticLabels, 1)
 	if len(streams) != 1 || !truncated || streams[0].Labels["pod"] != "a" {
 		t.Fatalf("unexpected streams: %#v truncated=%v", streams, truncated)
@@ -65,7 +67,7 @@ func TestMapStreamsFiltersSortsAndTruncates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal streams: %v", err)
 	}
-	for _, forbidden := range []string{"filename", "/private", "custom", "internal", "hidden-a", "hidden-b"} {
+	for _, forbidden := range []string{"filename", "/private", "custom", "internal", "hidden-a", "hidden-b", "only-hidden"} {
 		if strings.Contains(string(payload), forbidden) {
 			t.Fatalf("forbidden value %q leaked: %s", forbidden, payload)
 		}
